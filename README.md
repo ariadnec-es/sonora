@@ -1,4 +1,4 @@
-# SONORA
+# Projeto de Engenharia de Software
 
 ## Índice
 * [Sobre o Projeto](#sobre-o-projeto)

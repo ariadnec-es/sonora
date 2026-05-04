@@ -47,7 +47,6 @@ document.getElementById("form").addEventListener("submit", async e => {
 
         const nomep = document.getElementById("nomep_play").value
         const evento = document.getElementById("evento_play").value
-
         const blocos = document.querySelectorAll(".musica")
 
         for (const bloco of blocos) {
@@ -121,7 +120,6 @@ document.getElementById("form").addEventListener("submit", async e => {
                 loading.classList.add("hidden")
                 return
             }
-
         }
 
         status.innerText = "Playbacks enviados com sucesso!"

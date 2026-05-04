@@ -14,10 +14,15 @@ Sonora
 Gerenciador e reprodutor de áudio para organização de eventos.
 
 ### Componentes
+
 Ariadne Silva
+
 Arthur Queiroz
+
 Cassio Costa
+
 Vitor Rayan
+
 Victor Silva
 
 ## Como clonar ou baixar

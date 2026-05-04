@@ -1,5 +1,4 @@
-<<<<<<< HEAD
-# Sonora
+# Projeto de Engenharia de Software
 
 ## Índice
 
@@ -23,40 +22,21 @@
 
 O **Sonora** é uma plataforma para gerenciamento de músicas em eventos, permitindo que organizadores criem eventos, recebam sugestões musicais dos participantes e controlem a aprovação e a reprodução das faixas.
 
-=======
-# SONORA
-
-## Índice
-* [Sobre o Projeto](#sobre-o-projeto)
-* [Como clonar ou baixar](#como-clonar-ou-baixar)
-* [Estrutura do Projeto](#estrutura-do-projeto)
-* [Licença](#licença)
-
-## Sobre o Projeto
-### Título
-Sonora
->>>>>>> 9bb5011 (Revise README for Sonora project)
 
 ### Descrição
 Gerenciador e reprodutor de áudio para organização de eventos.
 
-<<<<<<< HEAD
-=======
 ### Componentes
+
 Ariadne Silva
+
 Arthur Queiroz
+
 Cassio Costa
+
 Vitor Rayan
+
 Victor Silva
->>>>>>> 9bb5011 (Revise README for Sonora project)
-
-## Equipe
-
-* Ariadne Silva
-* Arthur Queiroz
-* Cassio Costa
-* Vitor Rayan
-* Victor Silva
 
 ---
 
@@ -120,15 +100,6 @@ git clone https://github.com/ariadnec-es/sonora.git
 ```bash
 git clone git@github.com:ariadnec-es/sonora.git
 ```
-
-### Baixar como ZIP
-
-1. Acesse o repositório no GitHub.
-2. Clique no botão **Code**.
-3. Selecione **Download ZIP**.
-4. Extraia o conteúdo em uma pasta de sua preferência.
-
----
 
 ## Como Executar o Projeto
 

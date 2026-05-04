@@ -39,11 +39,17 @@ Se você já configurou sua chave SSH no GitHub, pode clonar usando:
 Isso criará uma cópia local do repositório em sua máquina.
 
 ### Baixar como ZIP
+
 Acesse a página do repositório no GitHub: https://github.com/ariadnec-es/sonora
+
 Clique no botão Code (verde).
+
 Selecione Download ZIP.
+
 Extraia o arquivo ZIP para o local desejado em seu computador.
+
 Estrutura do Projeto
+
 Esta seção pode variar conforme a organização do repositório de cada grupo.
 
 ```

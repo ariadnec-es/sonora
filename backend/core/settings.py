@@ -1,11 +1,15 @@
 from pathlib import Path
 from datetime import timedelta
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = 'your-secret-key'
+SECRET_KEY = os.getenv("SECRET_KEY",'qPpWy6NWh8TaTsYkcDNqzQ')
 
-DEBUG = True
+DEBUG = os.getenv("DEBUG", True)
 
 ALLOWED_HOSTS = ["*"]
 
@@ -59,19 +63,27 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'core.wsgi.application'
 
-# Banco de dados
+# Banco de dados MySQL
+# DATABASES = {
+#     'default': {
+#         'ENGINE': 'django.db.backends.mysql',
+#         'NAME': 'sonoraDB',
+#         'USER': 'root',
+#         'PASSWORD': '2001',
+#         'HOST': '127.0.0.1',  # 👈 nome do serviço
+#         'PORT': '3306',
+#         'OPTIONS': {
+#             'charset': 'utf8mb4',
+#             'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
+#         },
+#     }
+# }
+
+# Protótipo SQLite3
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'sonoraDB',
-        'USER': 'root',
-        'PASSWORD': 'root',
-        'HOST': 'db',  # 👈 nome do serviço
-        'PORT': '3306',
-        'OPTIONS': {
-            'charset': 'utf8mb4',
-            'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
-        },
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'sonoradb.sqlite3',
     }
 }
 
@@ -104,26 +116,28 @@ REST_FRAMEWORK = {
     ),
 }
 
+# NOTE: Token + mais seguro
 # =========================
 # SIMPLE JWT
 # =========================
-SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=30),
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
-    'AUTH_HEADER_TYPES': ('Bearer',),
-    'AUTH_TOKEN_CLASSES': ('rest_framework_simplejwt.tokens.AccessToken',),
-}
+# SIMPLE_JWT = {
+#     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=30),
+#     'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
+#     'AUTH_HEADER_TYPES': ('Bearer',),
+#     'AUTH_TOKEN_CLASSES': ('rest_framework_simplejwt.tokens.AccessToken',),
+# }
 
 
-AUTH_USER_MODEL = 'sonoraAPI.User'
 # =========================
 # DJANGO-AXES (proteção contra brute force)
 # =========================
+
 AUTHENTICATION_BACKENDS = [
     'axes.backends.AxesBackend',  # deve vir primeiro
     'django.contrib.auth.backends.ModelBackend',
 ]
 
+AUTH_USER_MODEL = 'sonoraAPI.User'
 AXES_FAILURE_LIMIT = 5  # tentativas permitidas
 AXES_COOLOFF_TIME = timedelta(minutes=30)  # tempo de bloqueio
 AXES_LOCKOUT_PARAMETERS = ['ip_address', 'username']
@@ -146,3 +160,10 @@ LOGGING = {
         },
     },
 }
+
+# Media no servidor
+STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+
+MEDIA_URL = 'media/'
+MEDIA_ROOT = BASE_DIR / 'media'

@@ -5,7 +5,7 @@ import uuid
 
 # NOTE: Depois
 # class BackGroundSound(model.Model): ...  # Musica de fundo
-# class Propery(model.Model): ... # local proprietário
+# class Property(model.Model): ... # local proprietário
 class TimestampModel(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

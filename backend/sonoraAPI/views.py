@@ -11,15 +11,24 @@ from .serializers import (
 )
 from django.http import JsonResponse
 from rest_framework.decorators import action
+from django.shortcuts import get_object_or_404
 
 class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all()
     serializer_class = UserSerializer
     permission_classes = [permissions.IsAuthenticated]
 
+    def _default(self):
+        return {
+            "is_active": True,
+        }
+
     def get_queryset(self):
         if self.request.user.is_admin:
-            return User.objects.all()
+            if self.request.query_params.get("managers", "false") == "true":
+                filters = self._default() | {"is_staff": True}
+                return User.objects.filter(**filters)
+            return User.objects.filter(**self._default())
         return User.objects.filter(id=self.request.user.id)
 
     def perform_destroy(self, instance):
@@ -29,21 +38,12 @@ class UserViewSet(viewsets.ModelViewSet):
         instance.save()
 
     def create(self, request, *args, **kwargs):
+        if request.user.is_admin == False:
+            return Response([], status=403)
         data = request.data.copy() 
         user = User.objects.create_user(**data)
         return Response(self.serializer_class(user).data)
 
-    @action(detail=False, methods=['GET'], url_path="managers")
-    def managers(self, request):
-        if request.user.is_admin:
-            users = User.objects.filter(is_staff=True)
-            serializer = self.get_serializer(users, many=True)
-            return Response(serializer.data)
-        if request.user.is_staff:
-            serializer = self.get_serializer(request.user)
-            return Response(serializer.data)
-
-        return Response([], status=status.HTTP_404_NOT_FOUND)
 
 class YoutubeMusicViewSet(viewsets.ModelViewSet):
     serializer_class = YoutubeMusicSerializer
@@ -79,8 +79,18 @@ class EventViewSet(viewsets.ModelViewSet):
             qs = Event.objects.filter(manager=user)
         else:
             return Event.objects.none()
-        return qs.filter(is_active=True, end_date__gte=hoje)
+        return qs.filter()
 
+    def create(self, request, *args, **kwargs):
+        user = request.user
+
+        if not user.is_staff or not request.is_admin:
+            return Response([], status=403)
+
+        data = request.data.copy() 
+        data['manager'] = user.id
+        event = Event.objects.create(**data)
+        return Response(self.serializer_class(event).data)
 
 def ping(requests):
     """Verificação se servidor responde"""

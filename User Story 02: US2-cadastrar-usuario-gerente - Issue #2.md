@@ -27,3 +27,9 @@ https://github.com/ariadnec-es/sonora/issues/2#issue-4376474080
 ## Brench
 
 feature/US02-cadastrar-usuario-gerente
+
+- Inserir usuário gerente:
+![alt text](images/doc/criar-gerente.png)
+
+- Vincular gerente com evento:
+![alt text](images/doc/vinculargerente.png)

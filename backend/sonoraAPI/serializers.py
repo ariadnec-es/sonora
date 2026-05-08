@@ -10,7 +10,7 @@ class PlanSerializer(serializers.ModelSerializer):
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'plan', 'is_staff', "is_admin"]
+        fields = ['id', 'username', 'email', 'plan', 'is_staff', "is_admin", "is_staff"]
 
     def to_representation(self, instance: User):
         data = super().to_representation(instance)

@@ -138,7 +138,7 @@ AUTHENTICATION_BACKENDS = [
 ]
 
 AUTH_USER_MODEL = 'sonoraAPI.User'
-AXES_FAILURE_LIMIT = 5  # tentativas permitidas
+AXES_FAILURE_LIMIT = 5 if not DEBUG else 100  # tentativas permitidas
 AXES_COOLOFF_TIME = timedelta(minutes=30)  # tempo de bloqueio
 AXES_LOCKOUT_PARAMETERS = ['ip_address', 'username']
 AXES_RESET_ON_SUCCESS = True

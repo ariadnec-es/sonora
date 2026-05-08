@@ -1,6 +1,8 @@
 from datetime import date
 from rest_framework import viewsets
+from rest_framework import status
 from rest_framework import permissions 
+from rest_framework.response import Response
 from .models import User, YoutubeMusic, Event
 from .serializers import (
     UserSerializer,
@@ -8,6 +10,7 @@ from .serializers import (
     EventSerializer
 )
 from django.http import JsonResponse
+from rest_framework.decorators import action
 
 class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all()
@@ -25,6 +28,22 @@ class UserViewSet(viewsets.ModelViewSet):
         instance.is_active = False
         instance.save()
 
+    def create(self, request, *args, **kwargs):
+        data = request.data.copy() 
+        user = User.objects.create_user(**data)
+        return Response(self.serializer_class(user).data)
+
+    @action(detail=False, methods=['GET'], url_path="managers")
+    def managers(self, request):
+        if request.user.is_admin:
+            users = User.objects.filter(is_staff=True)
+            serializer = self.get_serializer(users, many=True)
+            return Response(serializer.data)
+        if request.user.is_staff:
+            serializer = self.get_serializer(request.user)
+            return Response(serializer.data)
+
+        return Response([], status=status.HTTP_404_NOT_FOUND)
 
 class YoutubeMusicViewSet(viewsets.ModelViewSet):
     serializer_class = YoutubeMusicSerializer
@@ -43,7 +62,6 @@ class YoutubeMusicViewSet(viewsets.ModelViewSet):
             instance.save()
         else:
             self.permission_denied(self.request)
-
 
 
 class EventViewSet(viewsets.ModelViewSet):

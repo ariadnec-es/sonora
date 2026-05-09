@@ -25,7 +25,7 @@ class UserSerializer(serializers.ModelSerializer):
 
     def get_plan(self, instace: User):
         if instace.plan is not None:
-            return PlanSerializer(instace.plan)
+            return Plan.objects.filter(id=instace.plan.id).values()
         return
 
     def get_my_events(self, instance: User):

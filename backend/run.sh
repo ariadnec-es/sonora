@@ -6,7 +6,7 @@ set -e
 # Verifica se a pasta .venv NÃO existe. Se não existir, ele cria.
 if [ ! -d ".venv" ]; then
     echo "📦 Criando ambiente virtual..."
-    python -m venv .venv
+    python3 -m venv .venv
 fi
 
 source .venv/bin/activate
@@ -19,6 +19,8 @@ echo "⏳ Executando migrações..."
 python manage.py makemigrations
 python manage.py migrate
 echo "✅ Migrações completas!"
+
+python manage.py collectstatic --noinput
 
 echo "🚀🚀🚀 Servidor local iniciando em: http://127.0.0.1:8000"
 python manage.py runserver 0.0.0.0:8000

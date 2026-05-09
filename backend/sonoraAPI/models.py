@@ -21,31 +21,31 @@ class PlanChoices(models.TextChoices): # <--- Mude de Choices para TextChoices
     EXPERIMENTACAO = "experimentacao", "Experimentação"
 
 class Plan(TimestampModel):
-    # Adicionei o parametro choices=CHOICES aqui
-    name = models.CharField(max_length=50, choices=PlanChoices.choices, default=PlanChoices.MENSAL) 
-    
-    # MUDANÇA: Mudou de DateField para DateTimeField (para suportar horas)
+
+    name = models.CharField(
+        max_length=50,
+        choices=PlanChoices.choices,
+        default=PlanChoices.MENSAL
+    )
+
     start_date = models.DateTimeField(null=True, blank=True)
     end_date = models.DateTimeField(null=True, blank=True)
 
     def save(self, *args, **kwargs):
-        if not self.start_date:
+
+        if self.start_date is None:
             self.start_date = timezone.now()
 
-        if self.name == "experimentacao":
+        if self.name == PlanChoices.EXPERIMENTACAO:
             self.end_date = self.start_date + timedelta(hours=2)
-            
-        elif self.name == "mensal":
+
+        elif self.name == PlanChoices.MENSAL:
             self.end_date = self.start_date + timedelta(days=30)
-            
-        elif self.name == "anual":
+
+        elif self.name == PlanChoices.ANUAL:
             self.end_date = self.start_date + timedelta(days=365)
 
         super().save(*args, **kwargs)
-
-    class Meta(TimestampModel.Meta):
-        db_table = 'plan'
-
 
 class User(AbstractUser):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -57,14 +57,15 @@ class User(AbstractUser):
     def save(self, *args, **kwargs):
         if not self.plan:
             plan = Plan.objects.create(name="experimentacao")
-            self.plan = plan.id
+            self.plan = plan
 
         super().save(*args, **kwargs)
 
     def __str__(self):
         is_admin = "S" if self.is_admin else "N"
         is_manager = "S" if self.is_admin else "N"
-        return f"Nome: {self.username} | Gerente: {is_manager} | Admin: {is_admin}"
+        plan = self.plan.end_date.date() if self.plan else "Não atribuído"
+        return f"Nome: {self.username} | Gerente: {is_manager} | Administrador: {is_admin} | Fim do Plano: {plan}"
 
     class Meta:
         db_table = 'users'
@@ -73,7 +74,7 @@ class User(AbstractUser):
 class YoutubeMusic(TimestampModel):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=100)
-    url = models.URLField(max_length=255) # Use URLField, é mais semântico
+    url = models.URLField(max_length=255) 
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='musics')
     observation = models.CharField(max_length=255, blank=True, null=True)
     is_active = models.BooleanField(default=True)

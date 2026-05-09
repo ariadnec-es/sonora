@@ -16,149 +16,356 @@ from django.http import JsonResponse
 from rest_framework.decorators import action
 from django.shortcuts import get_object_or_404
 
-class UserViewSet(viewsets.ModelViewSet):
-    queryset = User.objects.all()
-    serializer_class = UserSerializer
+
+from datetime import date
+
+from django.db.models import Q
+
+from rest_framework import permissions
+from rest_framework import viewsets
+from rest_framework.response import Response
+
+from .models import (
+    User,
+    YoutubeMusic,
+    Event,
+    LinkEventMusic,
+    Plan,
+    PlanChoices
+)
+
+from .serializers import (
+    UserSerializer,
+    YoutubeMusicSerializer,
+    EventSerializer,
+    LinkEventMusicSerializer,
+)
+
+
+# =========================================================
+# BASE
+# =========================================================
+
+class BaseViewSet(viewsets.ModelViewSet):
+    """
+    Classe base com:
+    - soft delete
+    - filtros padrões
+    - helpers de permissão
+    """
+
     permission_classes = [permissions.IsAuthenticated]
 
-    def _default(self):
+    def default_filters(self):
         return {
-            "is_active": True,
+            "is_active": True
         }
 
-    def get_queryset(self):
-        if self.request.user.is_admin:
-            if self.request.query_params.get("managers", "false") == "true":
-                filters = self._default() | {"is_manager": True}
-                return User.objects.filter(**filters)
-            return User.objects.filter(**self._default())
-        return User.objects.filter(id=self.request.user.id)
+    def is_admin(self):
+        return self.request.user.is_admin
+
+    def is_manager(self):
+        return self.request.user.is_manager
+
+    def today(self):
+        return date.today()
+
+    def deny(self):
+        self.permission_denied(self.request)
 
     def perform_destroy(self, instance):
-        if not self.request.user.is_admin:
-            self.permission_denied(self.request)
+        """
+        Soft delete padrão
+        """
+        if not self.can_delete(instance):
+            self.deny()
+
         instance.is_active = False
         instance.save()
 
-    def create(self, request, *args, **kwargs):
-        if not request.user.is_admin:
-            return Response([], status=403)
-            
-        data = request.data.copy()
-        plan_name = data.pop("plan", None) 
-
-        if plan_name is not None:
-            if plan_name not in PlanChoices.values: 
-                return Response({"error": f"Plano '{plan_name}' não existe."}, status=400)
-
-        user = User.objects.create_user(**data) 
-
-        if plan_name is not None:
-            plan_obj = Plan.objects.create(name=plan_name)
-            
-            user.plan = plan_obj 
-            user.save()
-
-        return Response(self.serializer_class(user).data, status=201)
+    def can_delete(self, instance):
+        """
+        Pode ser sobrescrito nas subclasses
+        """
+        return self.is_admin()
 
 
-class YoutubeMusicViewSet(viewsets.ModelViewSet):
+# =========================================================
+# USERS
+# =========================================================
+
+class UserViewSet(BaseViewSet):
+    serializer_class = UserSerializer
+    queryset = User.objects.none()
+
+    def get_queryset(self):
+        user = self.request.user
+
+        if self.is_admin():
+            if self.request.query_params.get("managers") == "true":
+                return User.objects.filter(
+                    **self.default_filters(),
+                    is_manager=True
+                )
+
+            return User.objects.filter(
+                **self.default_filters()
+            )
+
+        return User.objects.filter(
+            id=user.id,
+            **self.default_filters()
+        )
+
+    def perform_create(self, serializer):
+        """
+        Apenas admin pode criar usuários
+        """
+
+        if not self.is_admin():
+            self.deny()
+
+        plan_name = self.request.data.get(
+            "plan",
+            PlanChoices.EXPERIMENTACAO
+        )
+
+        # Validação correta
+        if plan_name not in PlanChoices.values:
+            raise ValueError("Plano inválido")
+
+        # Cria usuário
+        user = serializer.save()
+
+        # Cria assinatura/plano corretamente
+        plan = Plan.objects.create(
+            name=plan_name
+        )
+
+        # Vincula ao usuário
+        user.plan = plan
+        user.save(update_fields=["plan"])
+
+    def can_delete(self, instance):
+        return self.is_admin()
+
+
+# =========================================================
+# MUSICS
+# =========================================================
+
+class YoutubeMusicViewSet(BaseViewSet):
     serializer_class = YoutubeMusicSerializer
-    permission_classes = [permissions.IsAuthenticated]
     queryset = YoutubeMusic.objects.none()
 
     def get_queryset(self):
         user = self.request.user
-        if user.is_admin:
-            return YoutubeMusic.objects.all()
-        return YoutubeMusic.objects.filter(user=user)
 
-    def perform_destroy(self, instance):
-        if self.request.user.is_admin or instance.user == self.request.user:
-            instance.is_active = False
-            instance.save()
-        else:
-            self.permission_denied(self.request)
+        base_filters = self.default_filters()
 
-    def create(self, request, *args, **kwargs):
-        user = request.user
-        data = request.data.copy() 
-        data['user'] = user
-        music = YoutubeMusic.objects.create(**data)
-        return Response(self.serializer_class(music).data)
+        if self.is_admin():
+            return YoutubeMusic.objects.filter(**base_filters)
 
-class EventViewSet(viewsets.ModelViewSet):
-    serializer_class = EventSerializer
-    permission_classes = [permissions.IsAuthenticated]
-    queryset = Event.objects.none()
-    
-    def get_queryset(self):
-        user = self.request.user
-        hoje = date.today()
-        
-        if user.is_admin:
-            qs = Event.objects.all()
-        elif user.is_manager:
-            qs = Event.objects.filter(manager=user)
-        else:
-            return Event.objects.none()
-        return qs.filter()
+        if self.is_manager():
+            """
+            Manager pode:
+            - ver próprias músicas
+            - ver músicas ligadas aos eventos dele
+            """
 
-    def create(self, request, *args, **kwargs):
-        user = request.user
+            return YoutubeMusic.objects.filter(
+                Q(user=user) |
+                Q(linkeventmusic__event_id__manager=user),
+                is_active=True
+            ).distinct()
 
-        if not user.is_manager or not user.is_admin:
-            return Response([], status=403)
-
-        data = request.data.copy() 
-        data['manager'] = user
-        event = Event.objects.create(**data)
-        return Response(self.serializer_class(event).data)
-
-
-class LinkEventMusicViewSet(viewsets.ModelViewSet):
-    serializer_class = LinkEventMusicSerializer
-    permission_classes = [permissions.IsAuthenticated]
-    queryset = LinkEventMusic.objects.none()
-    
-    def get_queryset(self):
-        user = self.request.user
-        hoje = date.today()
-        
-        if user.is_admin:
-            qs = LinkEventMusic.objects.all()
-        elif user.is_manager:
-            qs = LinkEventMusic.objects.filter(event_id__manager=user)
-        else:
-            return LinkEventMusic.objects.none()
-        return qs.filter()
-
-    def create(self, request, *args, **kwargs):
-        user = request.user
-
-        if not user.is_manager or not user.is_admin:
-            return Response([], status=403)
-
-        data = request.data.copy() 
-        event_id = data.get("event") or data.get("event_id")
-
-        event = Event.objects.filter(id=event_id).first()
-
-        if not event:
-            return JsonResponse({"error": "Evento não econtrado"}, safe=False)
-
-        if event.manager != user:
-            return JsonResponse({"error": f"{user.username} não é gerente do evento {event.event_name}"}, safe=False)
-
-        music = get_object_or_404(YoutubeMusic, id=data.get("music") or data.get("music_id"))
-        link = LinkEventMusic.objects.create(
-            event_id=event,
-            music_id=music
+        """
+        Usuário comum:
+        apenas próprias músicas
+        """
+        return YoutubeMusic.objects.filter(
+            user=user,
+            **base_filters
         )
 
-        return Response(self.serializer_class(link).data)
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+    def can_delete(self, instance):
+        user = self.request.user
+
+        if self.is_admin():
+            return True
+
+        return instance.user == user
+
+    def perform_update(self, serializer):
+        instance = self.get_object()
+        user = self.request.user
+
+        if self.is_admin():
+            serializer.save()
+            return
+
+        if instance.user != user:
+            self.deny()
+
+        serializer.save()
 
 
+# =========================================================
+# EVENTS
+# =========================================================
+
+class EventViewSet(BaseViewSet):
+    serializer_class = EventSerializer
+    queryset = Event.objects.none()
+
+    def get_queryset(self):
+        user = self.request.user
+
+        base_filters = self.default_filters()
+
+        if self.is_admin():
+            return Event.objects.filter(**base_filters)
+
+        if self.is_manager():
+            return Event.objects.filter(
+                manager=user,
+                end_date__gte=self.today(),
+                **base_filters
+            )
+
+        return Event.objects.none()
+
+    def perform_create(self, serializer):
+        user = self.request.user
+
+        if not (self.is_admin() or self.is_manager()):
+            self.deny()
+
+        serializer.save(manager=user)
+
+    def perform_update(self, serializer):
+        instance = self.get_object()
+
+        if self.is_admin():
+            serializer.save()
+            return
+
+        if not self.is_manager():
+            self.deny()
+
+        if instance.manager != self.request.user:
+            self.deny()
+
+        if instance.end_date < self.today():
+            self.deny()
+
+        serializer.save()
+
+    def can_delete(self, instance):
+        user = self.request.user
+
+        if self.is_admin():
+            return True
+
+        if not self.is_manager():
+            return False
+
+        if instance.manager != user:
+            return False
+
+        return instance.end_date >= self.today()
+
+
+# =========================================================
+# EVENT <-> MUSIC
+# =========================================================
+
+class LinkEventMusicViewSet(BaseViewSet):
+    serializer_class = LinkEventMusicSerializer
+    queryset = LinkEventMusic.objects.none()
+
+    def get_queryset(self):
+        user = self.request.user
+
+        base_filters = self.default_filters()
+
+        if self.is_admin():
+            return LinkEventMusic.objects.filter(**base_filters)
+
+        if self.is_manager():
+            return LinkEventMusic.objects.filter(
+                event_id__manager=user,
+                event_id__end_date__gte=self.today(),
+                **base_filters
+            )
+
+        return LinkEventMusic.objects.none()
+
+    def perform_create(self, serializer):
+        user = self.request.user
+
+        if not (self.is_admin() or self.is_manager()):
+            self.deny()
+
+        event = serializer.validated_data.get("event_id")
+        music = serializer.validated_data.get("music_id")
+
+        if not event:
+            raise ValueError("Evento inválido")
+
+        if not music:
+            raise ValueError("Música inválida")
+
+        if not self.is_admin():
+            """
+            Manager só pode adicionar:
+            - eventos dele
+            - eventos ativos
+            """
+
+            if event.manager != user:
+                self.deny()
+
+            if event.end_date < self.today():
+                self.deny()
+
+        serializer.save()
+
+    def perform_update(self, serializer):
+        instance = self.get_object()
+        user = self.request.user
+
+        if self.is_admin():
+            serializer.save()
+            return
+
+        if not self.is_manager():
+            self.deny()
+
+        if instance.event_id.manager != user:
+            self.deny()
+
+        if instance.event_id.end_date < self.today():
+            self.deny()
+
+        serializer.save()
+
+    def can_delete(self, instance):
+        user = self.request.user
+
+        if self.is_admin():
+            return True
+
+        if not self.is_manager():
+            return False
+
+        if instance.event_id.manager != user:
+            return False
+
+        return instance.event_id.end_date >= self.today()
 
 # TODO: Lógica de pagamento
 @require_POST

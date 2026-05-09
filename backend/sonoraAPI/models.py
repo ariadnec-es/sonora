@@ -56,7 +56,7 @@ class User(AbstractUser):
 
     def save(self, *args, **kwargs):
         if not self.plan:
-            plan = Plan.objects.create(name="experimentacao")
+            plan = Plan.objects.create(name=PlanChoices.EXPERIMENTACAO)
             self.plan = plan
 
         super().save(*args, **kwargs)

@@ -1,3 +1,4 @@
+from typing import Any
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 from datetime import date
@@ -12,34 +13,7 @@ from .serializers import (
     EventSerializer,
     LinkEventMusicSerializer,
 )
-from django.http import JsonResponse
-from rest_framework.decorators import action
-from django.shortcuts import get_object_or_404
-
-
-from datetime import date
-
 from django.db.models import Q
-
-from rest_framework import permissions
-from rest_framework import viewsets
-from rest_framework.response import Response
-
-from .models import (
-    User,
-    YoutubeMusic,
-    Event,
-    LinkEventMusic,
-    Plan,
-    PlanChoices
-)
-
-from .serializers import (
-    UserSerializer,
-    YoutubeMusicSerializer,
-    EventSerializer,
-    LinkEventMusicSerializer,
-)
 
 
 # =========================================================
@@ -83,6 +57,17 @@ class BaseViewSet(viewsets.ModelViewSet):
         instance.is_active = False
         instance.save()
 
+    def filter_queryset(self, queryset):
+        queryset = super().filter_queryset(queryset)
+        filters = self.request.query_params.dict()
+        safe_filters = {k: v for k, v in filters.items() if k not in ['page', 'limit', 'format', 'managers']}
+        if safe_filters:
+            try:
+                queryset = queryset.filter(**safe_filters)
+            except Exception:
+                pass
+        return queryset
+
     def can_delete(self, instance):
         """
         Pode ser sobrescrito nas subclasses
@@ -117,7 +102,7 @@ class UserViewSet(BaseViewSet):
             **self.default_filters()
         )
 
-    def perform_create(self, serializer):
+    def create(self, request):
         """
         Apenas admin pode criar usuários
         """
@@ -134,17 +119,37 @@ class UserViewSet(BaseViewSet):
         if plan_name not in PlanChoices.values:
             raise ValueError("Plano inválido")
 
-        # Cria usuário
-        user = serializer.save()
-
         # Cria assinatura/plano corretamente
         plan = Plan.objects.create(
             name=plan_name
         )
 
-        # Vincula ao usuário
-        user.plan = plan
-        user.save(update_fields=["plan"])
+        # Cria usuário
+        # Usamos .copy() no request.data para não mutar o QueryDict
+        data = self.request.data.copy() if hasattr(self.request.data, 'copy') else dict(self.request.data)
+        
+        # Remove a string 'plan' que veio no payload para não conflitar com a instância criada
+        if 'plan' in data:
+            del data['plan']
+            
+        data['plan'] = plan
+        
+        password = data.pop('password', None)
+        # Se os dados vieram como lista de um caractere de QueryDict, resolvemos isso
+        # ou apenas repassamos pro create de forma segura.
+        # No entanto, DRF ViewSet com dados de requisição geralmente é dict simples no final.
+        user = User.objects.create(**data)
+        
+        # Aqui fazemos o HASH da senha!
+        if password:
+            # Em alguns casos QueryDict pode trazer lista no password
+            if isinstance(password, list):
+                password = password[0]
+            user.set_password(password)
+            user.save()
+            
+        return Response(UserSerializer(user).data)
+
 
     def can_delete(self, instance):
         return self.is_admin()
@@ -319,6 +324,9 @@ class LinkEventMusicViewSet(BaseViewSet):
         if not music:
             raise ValueError("Música inválida")
 
+        if event.manager != user:
+            self.deny()
+
         if not self.is_admin():
             """
             Manager só pode adicionar:
@@ -326,8 +334,6 @@ class LinkEventMusicViewSet(BaseViewSet):
             - eventos ativos
             """
 
-            if event.manager != user:
-                self.deny()
 
             if event.end_date < self.today():
                 self.deny()
@@ -380,7 +386,7 @@ def renew_plan(request):
 
     new_plan = request.POST.get("new_plan", "experimentacao")
 
-    if new_plan not in PlanChoices.choices:
+    if new_plan not in PlanChoices.values:
         return JsonResponse(
             {"error": "Plano inválido"},
             status=400

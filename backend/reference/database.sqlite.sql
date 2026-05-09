@@ -1,59 +1,72 @@
--- SQLite não usa AUTO_INCREMENT ou UUID nativo, 
--- ele usa INTEGER PRIMARY KEY para chaves sequenciais 
--- ou TEXT para chaves UUID.
+CREATE DATABASE IF NOT EXISTS sonoradb;
+USE sonoradb;
 
--- Tabela de planos
-CREATE TABLE "plan" (
-    "id" integer NOT NULL PRIMARY KEY AUTOINCREMENT,
-    "name" varchar(50) NOT NULL,
-    "created_at" datetime NOT NULL,
-    "updated_at" datetime NOT NULL
+CREATE TABLE IF NOT EXISTS plans (
+    email VARCHAR(254) NULL,
+    is_staff BOOLEAN DEFAULT 0,
+    is_superuser BOOLEAN DEFAULT 0,
+    is_active BOOLEAN DEFAULT 1,
+    date_joined DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+    plan_id INTEGER NULL,
+    is_admin BOOLEAN DEFAULT 0,
+    is_manager BOOLEAN DEFAULT 0,
+
+    FOREIGN KEY (plan_id)
+        REFERENCES plans(id)
+        ON DELETE SET NULL
 );
 
--- Tabela de usuários
-CREATE TABLE "users" (
-    "password" varchar(128) NOT NULL,
-    "last_login" datetime NULL,
-    "is_superuser" bool NOT NULL,
-    "username" varchar(150) NOT NULL UNIQUE,
-    "first_name" varchar(150) NOT NULL,
-    "last_name" varchar(150) NOT NULL,
-    "email" varchar(254) NOT NULL,
-    "is_staff" bool NOT NULL,
-    "is_active" bool NOT NULL,
-    "date_joined" datetime NOT NULL,
-    "id" char(32) NOT NULL PRIMARY KEY,
-    "plan_id" integer NULL REFERENCES "plan" ("id") DEFERRABLE INITIALLY DEFERRED,
-    "is_admin" bool NOT NULL
+
+CREATE TABLE IF NOT EXISTS youtube_musics (
+    id CHAR(36) PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    url VARCHAR(255) NOT NULL,
+    user_id CHAR(36) NULL,
+    observation VARCHAR(255) NULL,
+    is_active BOOLEAN DEFAULT 1,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    UNIQUE(name, url),
+
+    FOREIGN KEY (user_id)
+        REFERENCES users(id)
+        ON DELETE SET NULL
 );
 
--- Tabela de músicas
-CREATE TABLE "youtube_music" (
-    "id" char(32) NOT NULL PRIMARY KEY,
-    "name" varchar(100) NOT NULL,
-    "url" varchar(255) NOT NULL,
-    "observation" varchar(255) NULL,
-    "is_active" bool NOT NULL,
-    "created_at" datetime NOT NULL,
-    "updated_at" datetime NOT NULL,
-    "user_id" char(32) NULL REFERENCES "users" ("id") DEFERRABLE INITIALLY DEFERRED
+
+CREATE TABLE IF NOT EXISTS events (
+    id CHAR(36) PRIMARY KEY,
+    start_date DATE NOT NULL,
+    end_date DATE NOT NULL,
+    event_name VARCHAR(100) NOT NULL,
+    manager_id CHAR(36) NULL,
+    is_active BOOLEAN DEFAULT 1,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (manager_id)
+        REFERENCES users(id)
+        ON DELETE CASCADE
 );
 
--- Tabela de eventos
-CREATE TABLE "event" (
-    "id" char(32) NOT NULL PRIMARY KEY,
-    "start_date" date NOT NULL,
-    "end_date" date NOT NULL,
-    "event_name" varchar(100) NOT NULL,
-    "is_active" bool NOT NULL,
-    "created_at" datetime NOT NULL,
-    "updated_at" datetime NOT NULL,
-    "youtube_music_id" char(32) NOT NULL REFERENCES "youtube_music" ("id") DEFERRABLE INITIALLY DEFERRED,
-    "manager_id" char(32) NOT NULL REFERENCES "users" ("id") DEFERRABLE INITIALLY DEFERRED
-);
 
--- Índices (O Django cria automaticamente para otimizar FKs)
-CREATE INDEX "users_plan_id_id" ON "users" ("plan_id");
-CREATE INDEX "youtube_music_user_id" ON "youtube_music" ("user_id");
-CREATE INDEX "event_youtube_music_id" ON "event" ("youtube_music_id");
-CREATE INDEX "event_manager_id" ON "event" ("manager_id");
+CREATE TABLE IF NOT EXISTS link_event_musics (
+    id CHAR(36) PRIMARY KEY,
+    music_id CHAR(36) NOT NULL,
+    event_id CHAR(36) NOT NULL,
+    is_active BOOLEAN DEFAULT 1,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    UNIQUE(event_id, music_id),
+
+    FOREIGN KEY (music_id)
+        REFERENCES youtube_musics(id)
+        ON DELETE CASCADE,
+
+    FOREIGN KEY (event_id)
+        REFERENCES events(id)
+        ON DELETE CASCADE
+);

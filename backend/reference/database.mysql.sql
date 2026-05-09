@@ -1,61 +1,71 @@
--- Criar banco (opcional, conforme sua preferência)
-CREATE DATABASE IF NOT EXISTS sonoraDB;
-USE sonoraDB;
+CREATE DATABASE IF NOT EXISTS sonoradb;
+USE sonoradb;
 
--- Tabela de planos
-CREATE TABLE plan (
-    id INT AUTO_INCREMENT PRIMARY KEY,
+CREATE TABLE IF NOT EXISTS plans (
+    id CHAR(36) PRIMARY KEY,
     name VARCHAR(50) NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    start_date DATE NOT NULL,
+    end_date DATE NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
--- Tabela de usuários (AbstractUser base)
-CREATE TABLE users (
-    id CHAR(36) PRIMARY KEY, -- UUID armazenado como string
-    username VARCHAR(150) NOT NULL UNIQUE,
-    password VARCHAR(128) NOT NULL,
-    email VARCHAR(254),
-    is_staff BOOLEAN DEFAULT FALSE,
-    is_active BOOLEAN DEFAULT TRUE,
-    is_admin BOOLEAN DEFAULT FALSE,
-    plan_id INT,
-    date_joined DATETIME DEFAULT CURRENT_TIMESTAMP,
-    
-    CONSTRAINT fk_user_plan
-        FOREIGN KEY (plan_id) REFERENCES plan(id) ON DELETE SET NULL
-);
 
--- Tabela de músicas
-CREATE TABLE youtube_music (
+CREATE TABLE IF NOT EXISTS youtube_musics (
     id CHAR(36) PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     url VARCHAR(255) NOT NULL,
-    user_id CHAR(36),
-    observation VARCHAR(255),
+    user_id CHAR(36) NULL,
+    observation VARCHAR(255) NULL,
     is_active BOOLEAN DEFAULT TRUE,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
-    CONSTRAINT fk_music_user
-        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+    CONSTRAINT uq_youtube_music_name_url
+        UNIQUE (name, url),
+
+    CONSTRAINT fk_youtube_music_user
+        FOREIGN KEY (user_id)
+        REFERENCES users(id)
+        ON DELETE SET NULL
 );
 
--- Tabela de eventos
-CREATE TABLE event (
+
+CREATE TABLE IF NOT EXISTS events (
     id CHAR(36) PRIMARY KEY,
-    event_name VARCHAR(100) NOT NULL,
     start_date DATE NOT NULL,
     end_date DATE NOT NULL,
-    youtube_music_id CHAR(36) NOT NULL,
-    manager_id CHAR(36) NOT NULL,
+    event_name VARCHAR(100) NOT NULL,
+    manager_id CHAR(36) NULL,
     is_active BOOLEAN DEFAULT TRUE,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-
-    CONSTRAINT fk_event_music
-        FOREIGN KEY (youtube_music_id) REFERENCES youtube_music(id) ON DELETE CASCADE,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
     CONSTRAINT fk_event_manager
-        FOREIGN KEY (manager_id) REFERENCES users(id) ON DELETE CASCADE
+        FOREIGN KEY (manager_id)
+        REFERENCES users(id)
+        ON DELETE CASCADE
+);
+
+
+CREATE TABLE IF NOT EXISTS link_event_musics (
+    id CHAR(36) PRIMARY KEY,
+    music_id CHAR(36) NOT NULL,
+    event_id CHAR(36) NOT NULL,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+    CONSTRAINT uq_event_music
+        UNIQUE (event_id, music_id),
+
+    CONSTRAINT fk_link_music
+        FOREIGN KEY (music_id)
+        REFERENCES youtube_musics(id)
+        ON DELETE CASCADE,
+
+    CONSTRAINT fk_link_event
+        FOREIGN KEY (event_id)
+        REFERENCES events(id)
+        ON DELETE CASCADE
 );

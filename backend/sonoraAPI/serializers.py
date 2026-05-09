@@ -13,13 +13,14 @@ class UserSerializer(serializers.ModelSerializer):
     my_events = serializers.SerializerMethodField()
     my_sounds = serializers.SerializerMethodField()
     plan = serializers.SerializerMethodField()
+
     class Meta:
         model = User
         fields = [
             'id',
             'username',
             'email',
-            'plan', 'is_staff', "is_admin", "is_staff", "plan", "my_events", "my_sounds"
+            'plan', 'is_manager', "is_admin", "is_staff", "plan", "my_events", "my_sounds"
         ]
 
     def get_plan(self, instace: User):
@@ -35,8 +36,6 @@ class UserSerializer(serializers.ModelSerializer):
         
     def to_representation(self, instance: User):
         data = super().to_representation(instance)
-        staff_value = data.pop('is_staff')
-        data['is_manager'] = staff_value
             
         return data
 
@@ -54,6 +53,7 @@ class EventSerializer(serializers.ModelSerializer):
         fields = (
            "id",
             "start_date",
+            "end_date",
             "event_name",
             "youtube_music",
             "is_active",

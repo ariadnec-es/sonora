@@ -16,7 +16,8 @@ class TimestampModel(models.Model):
 
 class Plan(TimestampModel): # Herdando o created_at
     name = models.CharField(max_length=50)
-    class Meta:
+
+    class Meta(TimestampModel.Meta):
         db_table = 'plan'
 
 
@@ -24,9 +25,15 @@ class User(AbstractUser):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     plan = models.ForeignKey(Plan, on_delete=models.SET_NULL, null=True, blank=True, related_name='users')
     is_admin = models.BooleanField(default=False)
+    is_manager = models.BooleanField(default=False)
     
     class Meta:
         db_table = 'users'
+
+    def __str__(self):
+        is_admin = "S" if self.is_admin else "N"
+        is_manager = "S" if self.is_admin else "N"
+        return f"Nome: {self.username} | Gerente: {is_manager} | Admin: {is_admin}"
 
 
 class YoutubeMusic(TimestampModel):
@@ -37,8 +44,14 @@ class YoutubeMusic(TimestampModel):
     observation = models.CharField(max_length=255, blank=True, null=True)
     is_active = models.BooleanField(default=True)
 
-    class Meta:
+    class Meta(TimestampModel.Meta):
         db_table = 'youtube_music'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['name', 'url'], 
+                name='unique_name_url_combination' # Dê um nome descritivo para essa regra
+            )
+        ]
 
 
 class Event(TimestampModel):
@@ -46,9 +59,37 @@ class Event(TimestampModel):
     start_date = models.DateField()
     end_date = models.DateField()
     event_name = models.CharField(max_length=100)
-    youtube_music = models.ForeignKey(YoutubeMusic, on_delete=models.CASCADE, related_name='events')
-    manager = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='managed_events')
+    manager = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='managed_events', null=True, blank=True)
     is_active = models.BooleanField(default=True)
 
-    class Meta:
-        db_table = 'event'
+    def __str__(self):
+        display_name = "Não informado"
+        if self.manager:
+            display_name = self.manager.username.capitalize()
+        return f"Gerente: {display_name} - {self.event_name.capitalize()}"
+
+
+    class Meta(TimestampModel.Meta):
+        db_table = 'events'
+
+class LinkMusicEvent(TimestampModel):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    music_id = models.ForeignKey(YoutubeMusic, on_delete=models.CASCADE, related_name='events', null=True, blank=True)
+    event_id = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='events', null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+
+    def __str__(self):
+        display_name = "Não informado"
+        if self.event_id.manager:
+            display_name = self.event_id.manager.username.capitalize()
+        return f"Gerente: {display_name} - {self.music_id.event_name.capitalize()}"
+
+    class Meta(TimestampModel.Meta):
+        db_table = 'link_event_musics'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['event_id', 'music_id'], 
+                name='unique_event_music_combination' # Dê um nome descritivo para essa regra
+            )
+        ]
+

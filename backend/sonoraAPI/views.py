@@ -63,6 +63,12 @@ class YoutubeMusicViewSet(viewsets.ModelViewSet):
         else:
             self.permission_denied(self.request)
 
+    def create(self, request, *args, **kwargs):
+        user = request.user
+        data = request.data.copy() 
+        data['user'] = user
+        music = YoutubeMusic.objects.create(**data)
+        return Response(self.serializer_class(music).data)
 
 class EventViewSet(viewsets.ModelViewSet):
     serializer_class = EventSerializer
@@ -84,11 +90,11 @@ class EventViewSet(viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         user = request.user
 
-        if not user.is_staff or not request.is_admin:
+        if not user.is_staff or not user.is_admin:
             return Response([], status=403)
 
         data = request.data.copy() 
-        data['manager'] = user.id
+        data['manager'] = user
         event = Event.objects.create(**data)
         return Response(self.serializer_class(event).data)
 

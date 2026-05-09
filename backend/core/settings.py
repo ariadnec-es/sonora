@@ -1,7 +1,7 @@
 from pathlib import Path
 from datetime import timedelta
 from dotenv import load_dotenv
-import os
+import os 
 
 load_dotenv()
 
@@ -38,6 +38,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'core.middleware.MiddleWare'
 
     # Axes middleware
     'axes.middleware.AxesMiddleware',

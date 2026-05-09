@@ -6,7 +6,7 @@ from rest_framework_simplejwt.views import (
 )
 from core import settings
 from django.conf.urls.static import static
-from sonoraAPI.views import ping
+from sonoraAPI.views import ping, renew_plan 
 
 prefix = "api"
 
@@ -15,6 +15,8 @@ urlpatterns = [
     path(f'{prefix}/token/', TokenObtainPairView.as_view()),
     path(f'{prefix}/token/refresh/', TokenRefreshView.as_view()),
     path(f'{prefix}/sonora/v1/', include("sonoraAPI.urls")),
+    path(f'{prefix}/renew_plan/', renew_plan, name="renew_plan"),
+
     # Checar se a API está ativa
     path(f'{prefix}/ping/', ping, name="ping"),
 ]

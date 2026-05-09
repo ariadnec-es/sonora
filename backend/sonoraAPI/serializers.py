@@ -1,5 +1,6 @@
+from django.db.models import F
 from rest_framework import serializers
-from .models import Plan, User, YoutubeMusic, Event
+from .models import Plan, User, YoutubeMusic, Event, LinkEventMusic
 
 
 class PlanSerializer(serializers.ModelSerializer):
@@ -7,7 +8,6 @@ class PlanSerializer(serializers.ModelSerializer):
         model = Plan
         fields = '__all__'
         read_only_fields = ['id', 'created_at']
-
 
 class UserSerializer(serializers.ModelSerializer):
     my_events = serializers.SerializerMethodField()
@@ -29,7 +29,21 @@ class UserSerializer(serializers.ModelSerializer):
         return
 
     def get_my_events(self, instance: User):
-        return Event.objects.filter(manager=instance).values() or []
+        return LinkEventMusic.objects.filter(
+            event_id__manager=instance, 
+            event_id__is_active=True
+        ).annotate(
+            event_name=F("event_id__event_name"), 
+            music_name=F("music_id__name"),
+            url=F("music_id__url"),
+        ).values(
+            "id", 
+            "music_name", 
+            "url",
+            "event_name",
+            "event_id",
+            "music_id",
+        )
 
     def get_my_sounds(self, instance: User):
         return YoutubeMusic.objects.filter(user=instance).values() or []
@@ -55,10 +69,16 @@ class EventSerializer(serializers.ModelSerializer):
             "start_date",
             "end_date",
             "event_name",
-            "youtube_music",
             "is_active",
             "manager"
-
         )
         read_only_fields = ['id', 'created_at']
 
+class LinkEventMusicSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LinkEventMusic
+        fields = (
+           "id",
+            "music_id",
+            "event_id"
+        )

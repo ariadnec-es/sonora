@@ -1,24 +1,24 @@
+from datetime import date
 from typing import Any
+
+from django.db.models import Q
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
-from datetime import date
-from rest_framework import viewsets
-from rest_framework import status
-from rest_framework import permissions 
+from rest_framework import permissions, status, viewsets
 from rest_framework.response import Response
-from .models import User, YoutubeMusic, Event, LinkEventMusic, PlanChoices, Plan
+
+from .models import Event, LinkEventMusic, Plan, PlanChoices, User, YoutubeMusic
 from .serializers import (
-    UserSerializer,
-    YoutubeMusicSerializer,
     EventSerializer,
     LinkEventMusicSerializer,
+    UserSerializer,
+    YoutubeMusicSerializer,
 )
-from django.db.models import Q
-
 
 # =========================================================
 # BASE
 # =========================================================
+
 
 class BaseViewSet(viewsets.ModelViewSet):
     """
@@ -31,9 +31,7 @@ class BaseViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def default_filters(self):
-        return {
-            "is_active": True
-        }
+        return {"is_active": True}
 
     def is_admin(self):
         return self.request.user.is_admin
@@ -60,7 +58,11 @@ class BaseViewSet(viewsets.ModelViewSet):
     def filter_queryset(self, queryset):
         queryset = super().filter_queryset(queryset)
         filters = self.request.query_params.dict()
-        safe_filters = {k: v for k, v in filters.items() if k not in ['page', 'limit', 'format', 'managers']}
+        safe_filters = {
+            k: v
+            for k, v in filters.items()
+            if k not in ["page", "limit", "format", "managers"]
+        }
         if safe_filters:
             try:
                 queryset = queryset.filter(**safe_filters)
@@ -79,6 +81,7 @@ class BaseViewSet(viewsets.ModelViewSet):
 # USERS
 # =========================================================
 
+
 class UserViewSet(BaseViewSet):
     serializer_class = UserSerializer
     queryset = User.objects.none()
@@ -88,19 +91,11 @@ class UserViewSet(BaseViewSet):
 
         if self.is_admin():
             if self.request.query_params.get("managers") == "true":
-                return User.objects.filter(
-                    **self.default_filters(),
-                    is_manager=True
-                )
+                return User.objects.filter(**self.default_filters(), is_manager=True)
 
-            return User.objects.filter(
-                **self.default_filters()
-            )
+            return User.objects.filter(**self.default_filters())
 
-        return User.objects.filter(
-            id=user.id,
-            **self.default_filters()
-        )
+        return User.objects.filter(id=user.id, **self.default_filters())
 
     def create(self, request):
         """
@@ -110,46 +105,35 @@ class UserViewSet(BaseViewSet):
         if not self.is_admin():
             self.deny()
 
-        plan_name = self.request.data.get(
-            "plan",
-            PlanChoices.EXPERIMENTACAO
-        )
+        plan_name = self.request.data.get("plan", PlanChoices.EXPERIMENTACAO)
 
-        # Validação correta
         if plan_name not in PlanChoices.values:
             raise ValueError("Plano inválido")
 
-        # Cria assinatura/plano corretamente
-        plan = Plan.objects.create(
-            name=plan_name
+        plan = Plan.objects.create(name=plan_name)
+
+        data = (
+            self.request.data.copy()
+            if hasattr(self.request.data, "copy")
+            else dict(self.request.data)
         )
 
-        # Cria usuário
-        # Usamos .copy() no request.data para não mutar o QueryDict
-        data = self.request.data.copy() if hasattr(self.request.data, 'copy') else dict(self.request.data)
-        
-        # Remove a string 'plan' que veio no payload para não conflitar com a instância criada
-        if 'plan' in data:
-            del data['plan']
-            
-        data['plan'] = plan
-        
-        password = data.pop('password', None)
-        # Se os dados vieram como lista de um caractere de QueryDict, resolvemos isso
-        # ou apenas repassamos pro create de forma segura.
-        # No entanto, DRF ViewSet com dados de requisição geralmente é dict simples no final.
+        if "plan" in data:
+            del data["plan"]
+
+        data["plan"] = plan
+
+        password = data.pop("password", None)
+
         user = User.objects.create(**data)
-        
-        # Aqui fazemos o HASH da senha!
+
         if password:
-            # Em alguns casos QueryDict pode trazer lista no password
             if isinstance(password, list):
                 password = password[0]
             user.set_password(password)
             user.save()
-            
-        return Response(UserSerializer(user).data)
 
+        return Response(UserSerializer(user).data)
 
     def can_delete(self, instance):
         return self.is_admin()
@@ -158,6 +142,7 @@ class UserViewSet(BaseViewSet):
 # =========================================================
 # MUSICS
 # =========================================================
+
 
 class YoutubeMusicViewSet(BaseViewSet):
     serializer_class = YoutubeMusicSerializer
@@ -179,19 +164,14 @@ class YoutubeMusicViewSet(BaseViewSet):
             """
 
             return YoutubeMusic.objects.filter(
-                Q(user=user) |
-                Q(linkeventmusic__event_id__manager=user),
-                is_active=True
+                Q(user=user) | Q(linkeventmusic__event_id__manager=user), is_active=True
             ).distinct()
 
         """
         Usuário comum:
         apenas próprias músicas
         """
-        return YoutubeMusic.objects.filter(
-            user=user,
-            **base_filters
-        )
+        return YoutubeMusic.objects.filter(user=user, **base_filters)
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
@@ -222,6 +202,7 @@ class YoutubeMusicViewSet(BaseViewSet):
 # EVENTS
 # =========================================================
 
+
 class EventViewSet(BaseViewSet):
     serializer_class = EventSerializer
     queryset = Event.objects.none()
@@ -236,9 +217,7 @@ class EventViewSet(BaseViewSet):
 
         if self.is_manager():
             return Event.objects.filter(
-                manager=user,
-                end_date__gte=self.today(),
-                **base_filters
+                manager=user, end_date__gte=self.today(), **base_filters
             )
 
         return Event.objects.none()
@@ -288,6 +267,7 @@ class EventViewSet(BaseViewSet):
 # EVENT <-> MUSIC
 # =========================================================
 
+
 class LinkEventMusicViewSet(BaseViewSet):
     serializer_class = LinkEventMusicSerializer
     queryset = LinkEventMusic.objects.none()
@@ -304,7 +284,7 @@ class LinkEventMusicViewSet(BaseViewSet):
             return LinkEventMusic.objects.filter(
                 event_id__manager=user,
                 event_id__end_date__gte=self.today(),
-                **base_filters
+                **base_filters,
             )
 
         return LinkEventMusic.objects.none()
@@ -333,7 +313,6 @@ class LinkEventMusicViewSet(BaseViewSet):
             - eventos dele
             - eventos ativos
             """
-
 
             if event.end_date < self.today():
                 self.deny()
@@ -373,33 +352,25 @@ class LinkEventMusicViewSet(BaseViewSet):
 
         return instance.event_id.end_date >= self.today()
 
-# TODO: Lógica de pagamento
+
+# TODO: Implementar lógica de pagamento
 @require_POST
 def renew_plan(request):
     user = request.user
 
     if not user.is_authenticated:
-        return JsonResponse(
-            {"error": "Usuário não autenticado"},
-            status=401
-        )
+        return JsonResponse({"error": "Usuário não autenticado"}, status=401)
 
     new_plan = request.POST.get("new_plan", "experimentacao")
 
     if new_plan not in PlanChoices.values:
-        return JsonResponse(
-            {"error": "Plano inválido"},
-            status=400
-        )
+        return JsonResponse({"error": "Plano inválido"}, status=400)
 
     user.plan = new_plan
     user.save()
 
     return JsonResponse(
-        {
-            "message": f"Plano de {user.username} atualizado para {user.plan}"
-        },
-        status=200
+        {"message": f"Plano de {user.username} atualizado para {user.plan}"}, status=200
     )
 
 
@@ -407,4 +378,4 @@ def ping(requests):
     """Verificação se servidor responde"""
     if not requests:
         return
-    return JsonResponse({"message": "pong"} , safe=False)
+    return JsonResponse({"message": "pong"}, safe=False)

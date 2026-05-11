@@ -1,24 +1,27 @@
+from django.conf.urls.static import static
 from django.contrib import admin
-from django.urls import path, include
+from django.urls import include, path
 from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView,
 )
-from core import settings
-from django.conf.urls.static import static
-from sonoraAPI.views import ping, renew_plan 
+from sonoraAPI.views import ping, renew_plan
 
-prefix = "api"
+from core import settings
+
+prefix = "api/sonora"
 
 urlpatterns = [
-    path('admin/', admin.site.urls),
-    path(f'{prefix}/token/', TokenObtainPairView.as_view()),
-    path(f'{prefix}/token/refresh/', TokenRefreshView.as_view()),
-    path(f'{prefix}/sonora/v1/', include("sonoraAPI.urls")),
-    path(f'{prefix}/renew_plan/', renew_plan, name="renew_plan"),
-
-    # Checar se a API está ativa
-    path(f'{prefix}/ping/', ping, name="ping"),
+    # Admin page
+    path("admin/", admin.site.urls),
+    # Token authentication
+    path(f"{prefix}/token/", TokenObtainPairView.as_view()),
+    path(f"{prefix}/token/refresh/", TokenRefreshView.as_view()),
+    # API endpoints
+    path(f"{prefix}/v1/", include("sonoraAPI.urls")),
+    path(f"{prefix}/renew_plan/", renew_plan, name="renew_plan"),
+    # Health check
+    path(f"{prefix}/ping/", ping, name="ping"),
 ]
 
 

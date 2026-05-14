@@ -4,6 +4,9 @@ from django.conf import settings
 import uuid 
 from django.utils import timezone
 from datetime import timedelta # Importante para fazer as contas de tempo
+from django.db.models import F
+
+from django.core.validators import MinValueValidator, MaxValueValidator
 
 # NOTE: Depois
 # class BackGroundSound(model.Model): ...  # Musica de fundo
@@ -77,6 +80,8 @@ class YoutubeMusic(TimestampModel):
     url = models.URLField(max_length=255) 
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='musics')
     observation = models.CharField(max_length=255, blank=True, null=True)
+    singer = models.CharField(max_length=50, blank=True, null=True)
+    duration = models.CharField(max_length=20, blank=True, null=True)
     is_active = models.BooleanField(default=True)
 
     class Meta(TimestampModel.Meta):
@@ -107,24 +112,26 @@ class Event(TimestampModel):
     class Meta(TimestampModel.Meta):
         db_table = 'events'
 
-class LinkEventMusic(TimestampModel):
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    music_id = models.ForeignKey(YoutubeMusic, on_delete=models.CASCADE)
-    event_id = models.ForeignKey(Event, on_delete=models.CASCADE)
-    is_active = models.BooleanField(default=True)
+
+class MusicOrder(TimestampModel):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, null=False, blank=False)
+    music = models.ForeignKey(YoutubeMusic, on_delete=models.CASCADE, null=False, blank=False)
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, null=False, blank=False)
+    order = models.IntegerField(validators=[ MinValueValidator(1), MaxValueValidator(30)])
 
     def __str__(self):
-        display_name = "Não informado"
-        if self.event_id.manager:
-            display_name = self.event_id.manager.username
-        return f"Gerente: {display_name} - {self.music_id.event_name.capitalize()}"
+        return f"Ordem: {self.order} Evento: {self.event.event_name} | Musica {self.music.name}"
+
 
     class Meta(TimestampModel.Meta):
-        db_table = 'link_event_musics'
+        db_table = 'music_order'
         constraints = [
             models.UniqueConstraint(
-                fields=['event_id', 'music_id'], 
-                name='unique_event_music_combination' # Dê um nome descritivo para essa regra
+                fields=['event', 'music'], 
+                name='unique_event_music_combination' 
+            ),
+            models.UniqueConstraint(
+                fields=['music', 'order'], 
+                name='unique_music_order_combination' 
             )
         ]
-

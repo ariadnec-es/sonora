@@ -1,5 +1,4 @@
 from datetime import date
-from typing import Any
 
 from django.db.models import Q
 from django.http import JsonResponse
@@ -7,18 +6,22 @@ from django.views.decorators.http import require_POST
 from rest_framework import permissions, status, viewsets
 from rest_framework.response import Response
 
-from .models import Event, LinkEventMusic, Plan, PlanChoices, User, YoutubeMusic
+from .models import Event, Plan, PlanChoices, User, YoutubeMusic
 from .serializers import (
-    EventSerializer,
-    LinkEventMusicSerializer,
     UserSerializer,
     YoutubeMusicSerializer,
+    EventSerializer,
 )
+
+from rest_framework.exceptions import ValidationError
+from rest_framework.decorators import action
+from django.db.models import Prefetch
+from .models import MusicOrder
+from .serializers import MusicOrderSerializer
 
 # =========================================================
 # BASE
 # =========================================================
-
 
 class BaseViewSet(viewsets.ModelViewSet):
     """
@@ -80,8 +83,6 @@ class BaseViewSet(viewsets.ModelViewSet):
 # =========================================================
 # USERS
 # =========================================================
-
-
 class UserViewSet(BaseViewSet):
     serializer_class = UserSerializer
     queryset = User.objects.none()
@@ -142,8 +143,6 @@ class UserViewSet(BaseViewSet):
 # =========================================================
 # MUSICS
 # =========================================================
-
-
 class YoutubeMusicViewSet(BaseViewSet):
     serializer_class = YoutubeMusicSerializer
     queryset = YoutubeMusic.objects.none()
@@ -201,8 +200,6 @@ class YoutubeMusicViewSet(BaseViewSet):
 # =========================================================
 # EVENTS
 # =========================================================
-
-
 class EventViewSet(BaseViewSet):
     serializer_class = EventSerializer
     queryset = Event.objects.none()
@@ -263,65 +260,33 @@ class EventViewSet(BaseViewSet):
         return instance.end_date >= self.today()
 
 
-# =========================================================
-# EVENT <-> MUSIC
-# =========================================================
 
 
-class LinkEventMusicViewSet(BaseViewSet):
-    serializer_class = LinkEventMusicSerializer
-    queryset = LinkEventMusic.objects.none()
+# =========================================================
+# MUSIC ORDERS
+# =========================================================
+class MusicOrderViewSet(BaseViewSet):
+    serializer_class = MusicOrderSerializer
+    queryset = MusicOrder.objects.none()
 
     def get_queryset(self):
         user = self.request.user
-
-        base_filters = self.default_filters()
+        base_filters = self.default_filters() # Usa o is_active=True do BaseViewSet
 
         if self.is_admin():
-            return LinkEventMusic.objects.filter(**base_filters)
+            return MusicOrder.objects.filter(**base_filters)
 
         if self.is_manager():
-            return LinkEventMusic.objects.filter(
-                event_id__manager=user,
-                event_id__end_date__gte=self.today(),
-                **base_filters,
-            )
+            # Manager vê apenas as ligações de músicas dos eventos DELE
+            return MusicOrder.objects.filter(event__manager=user, **base_filters)
 
-        return LinkEventMusic.objects.none()
+        # Usuários comuns não gerenciam ordem de músicas de eventos
+        return MusicOrder.objects.none()
 
     def perform_create(self, serializer):
         user = self.request.user
-
-        if not (self.is_admin() or self.is_manager()):
-            self.deny()
-
-        event = serializer.validated_data.get("event_id")
-        music = serializer.validated_data.get("music_id")
-
-        if not event:
-            raise ValueError("Evento inválido")
-
-        if not music:
-            raise ValueError("Música inválida")
-
-        if event.manager != user:
-            self.deny()
-
-        if not self.is_admin():
-            """
-            Manager só pode adicionar:
-            - eventos dele
-            - eventos ativos
-            """
-
-            if event.end_date < self.today():
-                self.deny()
-
-        serializer.save()
-
-    def perform_update(self, serializer):
-        instance = self.get_object()
-        user = self.request.user
+        event = serializer.validated_data['event']
+        music = serializer.validated_data['music']
 
         if self.is_admin():
             serializer.save()
@@ -330,11 +295,40 @@ class LinkEventMusicViewSet(BaseViewSet):
         if not self.is_manager():
             self.deny()
 
-        if instance.event_id.manager != user:
+        # Regra 1: Manager deve ser o dono do evento
+        if event.manager != user:
             self.deny()
 
-        if instance.event_id.end_date < self.today():
+        # Regra 2: Evento não pode estar expirado
+        if event.end_date < self.today():
+            raise ValidationError({"event": "Não é possível adicionar músicas a um evento finalizado."})
+
+        # Regra 3: O manager só pode adicionar músicas que pertencem a ele
+        if music.user != user:
+            raise ValidationError({"music": "Você só pode adicionar as suas próprias músicas neste evento."})
+
+        serializer.save()
+
+    def perform_update(self, serializer):
+        instance = self.get_object()
+        user = self.request.user
+        # Se tentarem trocar o evento na atualização, pegamos o novo. Se não, mantém o atual.
+        event = serializer.validated_data.get('event', instance.event) 
+
+        if self.is_admin():
+            serializer.save()
+            return
+
+        if not self.is_manager():
             self.deny()
+
+        # Garante que ele é dono do evento atual e do novo evento (caso tente trocar)
+        if instance.event.manager != user or event.manager != user:
+            self.deny()
+
+        # Garante que o evento ainda não expirou
+        if event.end_date < self.today():
+             raise ValidationError({"event": "O evento já foi finalizado, não é possível alterar as músicas."})
 
         serializer.save()
 
@@ -347,13 +341,16 @@ class LinkEventMusicViewSet(BaseViewSet):
         if not self.is_manager():
             return False
 
-        if instance.event_id.manager != user:
+        if instance.event.manager != user:
             return False
 
-        return instance.event_id.end_date >= self.today()
+        if instance.event.end_date < self.today():
+            return False # Impede deletar músicas de histórico de eventos passados
+
+        return True
 
 
-# TODO: Implementar lógica de pagamento
+# TODO: Implementar no futuro lógica de pagamento
 @require_POST
 def renew_plan(request):
     user = request.user
@@ -372,7 +369,6 @@ def renew_plan(request):
     return JsonResponse(
         {"message": f"Plano de {user.username} atualizado para {user.plan}"}, status=200
     )
-
 
 def ping(requests):
     """Verificação se servidor responde"""

@@ -7,7 +7,7 @@ Bem-vindo à documentação do backend do projeto Sonora. Esta API foi construí
 Antes de começar, certifique-se de ter instalado em sua máquina:
 *   Python 3.10 ou superior
 *   Pip (gerenciador de pacotes do Python)
-*   Node.js (opcional, para testes com o script JS)
+*   Node.js (opcional, parapings com o script JS)
 
 ---
 

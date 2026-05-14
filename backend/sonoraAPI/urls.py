@@ -4,14 +4,14 @@ from .views import (
     UserViewSet,
     YoutubeMusicViewSet,
     EventViewSet,
-    LinkEventMusicViewSet
+    MusicOrderViewSet
 )
 
 router = DefaultRouter()
 router.register(r'users', UserViewSet)
 router.register(r'musics', YoutubeMusicViewSet)
 router.register(r'events', EventViewSet)
-router.register(r'link_event_music', LinkEventMusicViewSet)
+router.register(r'music-order', MusicOrderViewSet)
 
 urlpatterns = [
     path('', include(router.urls)),

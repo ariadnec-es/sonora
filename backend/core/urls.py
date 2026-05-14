@@ -21,7 +21,7 @@ urlpatterns = [
     path(f"{prefix}/v1/", include("sonoraAPI.urls")),
     path(f"{prefix}/renew_plan/", renew_plan, name="renew_plan"),
     # Health check
-    path(f"{prefix}/ping/", ping, name="ping"),
+    path(f"{prefix}/ping/",ping, name="ping"),
 ]
 
 

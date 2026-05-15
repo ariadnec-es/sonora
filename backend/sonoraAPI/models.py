@@ -12,6 +12,7 @@ from django.core.validators import MinValueValidator, MaxValueValidator
 # class BackGroundSound(model.Model): ...  # Musica de fundo
 # class Property(model.Model): ... # local proprietário
 class TimestampModel(models.Model):
+    objects = models.Manager()
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -89,7 +90,7 @@ class YoutubeMusic(TimestampModel):
         constraints = [
             models.UniqueConstraint(
                 fields=['name', 'url'], 
-                name='unique_name_url_combination' # Dê um nome descritivo para essa regra
+                name='unique_name_url_combination' 
             )
         ]
 

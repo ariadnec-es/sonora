@@ -5,25 +5,30 @@ from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView,
 )
-from sonoraAPI.views import ping, renew_plan
 
+from sonoraAPI.views import ping, renew_plan
 from core import settings
 
-prefix = "api/sonora"
+API_PREFIX = "api/sonora/v1/"
 
 urlpatterns = [
-    # Admin page
+    # Admin
     path("admin/", admin.site.urls),
-    # Token authentication
-    path(f"{prefix}/token/", TokenObtainPairView.as_view()),
-    path(f"{prefix}/token/refresh/", TokenRefreshView.as_view()),
-    # API endpoints
-    path(f"{prefix}/v1/", include("sonoraAPI.urls")),
-    path(f"{prefix}/renew_plan/", renew_plan, name="renew_plan"),
-    # Health check
-    path(f"{prefix}/ping/",ping, name="ping"),
+
+    # Auth
+    path(f"{API_PREFIX}token/", TokenObtainPairView.as_view()),
+    path(f"{API_PREFIX}token/refresh/", TokenRefreshView.as_view()),
+
+    # App routes
+    path(f"{API_PREFIX}", include("sonoraAPI.urls")),
+
+    # Extra endpoints
+    path(f"{API_PREFIX}renew_plan/", renew_plan, name="renew_plan"),
+    path(f"{API_PREFIX}ping/", ping, name="ping"),
 ]
 
-
 if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+    urlpatterns += static(
+        settings.MEDIA_URL,
+        document_root=settings.MEDIA_ROOT,
+    )

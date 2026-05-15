@@ -2,10 +2,9 @@ from datetime import date
 
 from django.db.models import Q
 from django.http import JsonResponse
-from django.views.decorators.http import require_POST
-from rest_framework import permissions, status, viewsets
-from rest_framework.response import Response
-
+from rest_framework import permissions, viewsets
+from rest_framework.response import Response 
+from .permissions import HasValidPlanPermission
 from .models import Event, Plan, PlanChoices, User, YoutubeMusic
 from .serializers import (
     UserSerializer,
@@ -14,15 +13,19 @@ from .serializers import (
 )
 
 from rest_framework.exceptions import ValidationError
-from rest_framework.decorators import action
-from django.db.models import Prefetch
 from .models import MusicOrder
 from .serializers import MusicOrderSerializer
+
+# TODO: Implementar no futuro lógica de pagamento
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework import status
+
+from rest_framework.permissions import IsAuthenticated
+from django.utils import timezone 
 
 # =========================================================
 # BASE
 # =========================================================
-
 class BaseViewSet(viewsets.ModelViewSet):
     """
     Classe base com:
@@ -31,7 +34,7 @@ class BaseViewSet(viewsets.ModelViewSet):
     - helpers de permissão
     """
 
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, HasValidPlanPermission]
 
     def default_filters(self):
         return {"is_active": True}
@@ -106,7 +109,8 @@ class UserViewSet(BaseViewSet):
         if not self.is_admin():
             self.deny()
 
-        plan_name = self.request.data.get("plan", PlanChoices.EXPERIMENTACAO)
+        body: dict = request.data 
+        plan_name = body.get("plan", PlanChoices.EXPERIMENTACAO)
 
         if plan_name not in PlanChoices.values:
             raise ValueError("Plano inválido")
@@ -260,8 +264,6 @@ class EventViewSet(BaseViewSet):
         return instance.end_date >= self.today()
 
 
-
-
 # =========================================================
 # MUSIC ORDERS
 # =========================================================
@@ -271,7 +273,7 @@ class MusicOrderViewSet(BaseViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        base_filters = self.default_filters() # Usa o is_active=True do BaseViewSet
+        base_filters = self.default_filters()  # Usa o is_active=True do BaseViewSet
 
         if self.is_admin():
             return MusicOrder.objects.filter(**base_filters)
@@ -285,8 +287,8 @@ class MusicOrderViewSet(BaseViewSet):
 
     def perform_create(self, serializer):
         user = self.request.user
-        event = serializer.validated_data['event']
-        music = serializer.validated_data['music']
+        event = serializer.validated_data["event"]
+        music = serializer.validated_data["music"]
 
         if self.is_admin():
             serializer.save()
@@ -301,11 +303,17 @@ class MusicOrderViewSet(BaseViewSet):
 
         # Regra 2: Evento não pode estar expirado
         if event.end_date < self.today():
-            raise ValidationError({"event": "Não é possível adicionar músicas a um evento finalizado."})
+            raise ValidationError(
+                {"event": "Não é possível adicionar músicas a um evento finalizado."}
+            )
 
         # Regra 3: O manager só pode adicionar músicas que pertencem a ele
         if music.user != user:
-            raise ValidationError({"music": "Você só pode adicionar as suas próprias músicas neste evento."})
+            raise ValidationError(
+                {
+                    "music": "Você só pode adicionar as suas próprias músicas neste evento."
+                }
+            )
 
         serializer.save()
 
@@ -313,7 +321,7 @@ class MusicOrderViewSet(BaseViewSet):
         instance = self.get_object()
         user = self.request.user
         # Se tentarem trocar o evento na atualização, pegamos o novo. Se não, mantém o atual.
-        event = serializer.validated_data.get('event', instance.event) 
+        event = serializer.validated_data.get("event", instance.event)
 
         if self.is_admin():
             serializer.save()
@@ -328,7 +336,11 @@ class MusicOrderViewSet(BaseViewSet):
 
         # Garante que o evento ainda não expirou
         if event.end_date < self.today():
-             raise ValidationError({"event": "O evento já foi finalizado, não é possível alterar as músicas."})
+            raise ValidationError(
+                {
+                    "event": "O evento já foi finalizado, não é possível alterar as músicas."
+                }
+            )
 
         serializer.save()
 
@@ -345,33 +357,43 @@ class MusicOrderViewSet(BaseViewSet):
             return False
 
         if instance.event.end_date < self.today():
-            return False # Impede deletar músicas de histórico de eventos passados
+            return False  # Impede deletar músicas de histórico de eventos passados
 
         return True
 
 
-# TODO: Implementar no futuro lógica de pagamento
-@require_POST
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
 def renew_plan(request):
+    if request.user.plan.end_date > timezone.now():
+        return Response(
+            {"message": "Plano para este usuário ainda está vigente"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+
     user = request.user
 
-    if not user.is_authenticated:
-        return JsonResponse({"error": "Usuário não autenticado"}, status=401)
-
-    new_plan = request.POST.get("new_plan", "experimentacao")
+    new_plan = request.data.get("new_plan", "experimentacao")
 
     if new_plan not in PlanChoices.values:
-        return JsonResponse({"error": "Plano inválido"}, status=400)
+        return Response(
+            {"error": "Plano inválido"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
 
-    user.plan = new_plan
+    user.plan = Plan.objects.create(name=new_plan)
     user.save()
 
-    return JsonResponse(
-        {"message": f"Plano de {user.username} atualizado para {user.plan}"}, status=200
+    return Response(
+        {
+            "message": f"Plano de {user.username} atualizado para {user.plan.name}"
+        },
+        status=status.HTTP_200_OK,
     )
 
 def ping(requests):
-    """Verificação se servidor responde"""
+    """Checkhealt do servidor"""
     if not requests:
         return
     return JsonResponse({"message": "pong"}, safe=False)

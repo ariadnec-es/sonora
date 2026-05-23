@@ -62,7 +62,7 @@ class TestPlanMiddlewareAndRenewal(BaseTestSetup):
 
         # Sem format='json' pois a view do Django puro espera form data padrão (request.POST)
         response = self.client.post(
-            "/api/sonora/renew_plan/", {"new_plan": PlanChoices.MENSAL}
+            "/api/sonora/v1/renew_plan/", {"new_plan": PlanChoices.MENSAL}
         )
         self.assertNotEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
@@ -71,7 +71,7 @@ class TestPlanMiddlewareAndRenewal(BaseTestSetup):
 
         # 1. Acesso normal (Ping)
         self.assertEqual(
-            self.client.get("/api/sonora/ping/").status_code, status.HTTP_200_OK
+            self.client.get("/api/sonora/v1/ping/").status_code, status.HTTP_200_OK
         )
 
         # 2. Plano expira
@@ -79,17 +79,17 @@ class TestPlanMiddlewareAndRenewal(BaseTestSetup):
 
         # 3. Tenta acessar rota e falha
         self.assertEqual(
-            self.client.get("/api/sonora/ping/").status_code,
+            self.client.get("/api/sonora/v1/ping/").status_code,
             status.HTTP_401_UNAUTHORIZED,
         )
 
         # 4. Renova o plano
-        self.client.post("/api/sonora/renew_plan/", {"new_plan": PlanChoices.ANUAL})
+        self.client.post("/api/sonora/v1/renew_plan/", {"new_plan": PlanChoices.ANUAL})
         self.normal_user.refresh_from_db()
 
         # 5. Volta a acessar normalmente
         self.assertEqual(
-            self.client.get("/api/sonora/ping/").status_code, status.HTTP_200_OK
+            self.client.get("/api/sonora/v1/ping/").status_code, status.HTTP_200_OK
         )
 
 

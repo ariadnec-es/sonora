@@ -1,11 +1,9 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import (
-    UserViewSet,
-    YoutubeMusicViewSet,
-    EventViewSet,
-    MusicOrderViewSet
-)
+from .viewsets.users import UserViewSet
+from .viewsets.musics import YoutubeMusicViewSet
+from .viewsets.events import EventViewSet
+from .viewsets.music_orders import MusicOrderViewSet
 
 router = DefaultRouter()
 router.register(r'users', UserViewSet)

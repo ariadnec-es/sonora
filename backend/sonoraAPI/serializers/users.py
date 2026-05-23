@@ -1,13 +1,7 @@
 from django.db.models import F
 from rest_framework import serializers
-from .models import Plan, User, YoutubeMusic, Event, MusicOrder
-
-class PlanSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Plan
-        fields = "__all__"
-        read_only_fields = ["id", "created_at"]
-
+from ..models import User, YoutubeMusic, Event, MusicOrder
+from .plans import PlanSerializer
 
 class UserSerializer(serializers.ModelSerializer):
     my_events = serializers.SerializerMethodField()
@@ -32,7 +26,7 @@ class UserSerializer(serializers.ModelSerializer):
             "password": {"write_only": True}
         }
 
-    def get_my_events(self, instance): # Retirei a tipagem (User) se não estiver importado, mas pode manter.
+    def get_my_events(self, instance):
         """Eventos e músicas"""
         
         # 1. Pega os IDs dos eventos
@@ -78,16 +72,11 @@ class UserSerializer(serializers.ModelSerializer):
             # Adiciona a música na ordem correspondente
             grouped_events[event_id]["musics"][row["order"]] = row["music_url"]
             
-        # CORREÇÃO CRÍTICA: O return fica AQUI (fora do loop for)
         return list(grouped_events.values())
-    def get_my_sounds(self, instance: User):
+
+    def get_my_sounds(self, instance):
         """Musicas que o usuário enviou"""
         return list(YoutubeMusic.objects.filter(user=instance).values())
-
-    def to_representation(self, instance: User):
-        data = super().to_representation(instance)
-
-        return data
 
     def create(self, validated_data):
         password = validated_data.pop("password", None)
@@ -104,35 +93,3 @@ class UserSerializer(serializers.ModelSerializer):
             user.set_password(password)
             user.save()
         return user
-
-
-class YoutubeMusicSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = YoutubeMusic
-        fields = "__all__"
-        read_only_fields = ["id"]
-
-
-class EventSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Event
-        fields = ("id", "start_date", "end_date", "event_name", "is_active", "manager")
-        read_only_fields = ["id", "created_at"]
-
-class MusicOrderSerializer(serializers.ModelSerializer):
-    # Campos aninhados apenas para visualização (Leitura)
-    music_details = YoutubeMusicSerializer(source='music', read_only=True)
-    event_details = EventSerializer(source='event', read_only=True)
-
-    class Meta:
-        model = MusicOrder
-        fields = [
-            'id', 
-            'music', 
-            'event', 
-            'order', 
-            'music_details', 
-            'event_details', 
-            'created_at', 
-            'updated_at'
-        ]

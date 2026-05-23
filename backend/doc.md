@@ -1,6 +1,18 @@
 # 🎵 Documentação do Projeto SonoraAPI
 
-Bem-vindo à documentação do backend do projeto Sonora. Esta API foi construída com **Django** e **Django REST Framework**, utilizando **JWT** para autenticação e **UUIDs** como identificadores únicos.
+Bem-vindo à documentação do backend do projeto Sonora.
+
+## 🏗️ Arquitetura do Sistema
+
+A API foi construída baseada no padrão RESTful utilizando a stack **Django** + **Django REST Framework (DRF)**. Os principais componentes e padrões da arquitetura incluem:
+
+*   **Autenticação:** Utiliza **JWT (JSON Web Tokens)** garantindo autenticação state-less (endpoints `/token/` e `/token/refresh/`).
+*   **Identificadores:** Utiliza **UUIDs** como chaves primárias, impedindo ataques de enumeração e previsibilidade de recursos.
+*   **Camada Base (`BaseViewSet`):** Os recursos principais herdam de um `BaseViewSet` customizado que centraliza as regras de negócio vitais do sistema:
+    *   **Soft Delete:** O método `perform_destroy` sobrescreve a deleção do DRF, aplicando `is_active = False` nos registros ao invés do Hard Delete.
+    *   **Filtros Inteligentes:** Auto-filtragem de registros ativos e sanitização dos `query_params`.
+    *   **Autorização Baseada em Papéis:** Métodos auxiliares (`is_admin`, `is_manager`, `can_delete`) resolvem o acesso aos dados em tempo de execução de acordo com o cargo do usuário.
+*   **Validação de Assinatura (`HasValidPlanPermission`):** Camada adicional de permissão que intercepta as chamadas à API, garantindo que as operações sejam efetuadas apenas se a assinatura (`Plan`) do usuário estiver com o `end_date` vigente.
 
 ## 📋 Pré-requisitos
 
@@ -256,19 +268,52 @@ Authorization: Bearer <seu_access_token>
 
 ---
 
-# 📚 Recursos (Endpoints principais)
+# 📚 Rotas do Sistema e Permissões
 
-| Método | Endpoint                           | Descrição                                |
-| :----- | :--------------------------------- | :--------------------------------------- |
-| `GET`  | `/api/sonora/v1/users/`            | Lista usuários (Admin apenas).           |
-| `POST` | `/api/sonora/v1/users/`            | Cria usuários/gerentes (Admin apenas).   |
-| `GET`  | `/api/sonora/v1/musics/`           | Lista músicas do usuário logado.         |
-| `POST` | `/api/sonora/v1/musics/`           | Cria uma nova música.                    |
-| `GET`  | `/api/sonora/v1/events/`           | Lista eventos futuros.                   |
-| `POST` | `/api/sonora/v1/events/`           | Cria um novo evento.                     |
-| `POST` | `/api/sonora/v1/link_event_music/` | Vincula música a evento.                 |
-| `POST` | `/api/sonora/v1/renew_plan/`       | Atualiza o plano do usuário autenticado. |
-| `GET`  | `/api/sonora/v1/ping/`             | Verifica se a API está online.           |
+A API segue o padrão RESTful para os ViewSets, fornecendo os métodos padrão (GET, POST, PUT, PATCH, DELETE) nos respectivos endpoints. Todas as rotas base são interceptadas pelo `HasValidPlanPermission` e `IsAuthenticated` (exceto `/token/` e `/ping/`).
+
+### 1. Autenticação e Utilitários
+
+| Rota / Endpoint | Método | Função | Permissões / Regras de Acesso |
+| :--- | :--- | :--- | :--- |
+| `/api/sonora/v1/token/` | `POST` | Login na API. | **Público**. Retorna os tokens `access` e `refresh`. |
+| `/api/sonora/v1/token/refresh/` | `POST` | Renova token de acesso. | **Público**. Recebe o `refresh` token antigo. |
+| `/api/sonora/v1/ping/` | `GET` | Healthcheck do servidor. | **Público**. Verifica se a API está de pé. |
+| `/api/sonora/v1/renew_plan/` | `POST` | Renovação do plano atual. | **Usuário autenticado**. Apenas permite a renovação se o plano anterior estiver expirado. |
+
+### 2. Recursos e ViewSets (DRF)
+
+As tabelas a seguir detalham as permissões específicas para cada recurso por grupo de acesso (Admin, Gerente/Manager, Usuário).
+
+#### 👤 Users (`/api/sonora/v1/users/`)
+| Nível de Acesso | Leitura (`GET`) | Criação (`POST`) | Edição / Deleção (`PUT`, `PATCH`, `DELETE`) |
+| :--- | :--- | :--- | :--- |
+| **Admin** | Acesso total a todos os usuários. | Permissão de criação de usuários e gerentes. | Acesso total, incluindo permissão exclusiva de Deleção (Soft). |
+| **Gerente** | Visualiza apenas o próprio perfil. | ⛔ Negado | Permissão de edição do próprio perfil. (⛔ Deleção Negada). |
+| **Usuário** | Visualiza apenas o próprio perfil. | ⛔ Negado | Permissão de edição do próprio perfil. (⛔ Deleção Negada). |
+
+#### 🎵 Músicas (YoutubeMusic) (`/api/sonora/v1/musics/`)
+| Nível de Acesso | Leitura (`GET`) | Criação (`POST`) | Edição / Deleção (`PUT`, `PATCH`, `DELETE`) |
+| :--- | :--- | :--- | :--- |
+| **Admin** | Acesso total a todas as músicas. | Criação irrestrita. | Acesso total a qualquer música. |
+| **Gerente** | Suas próprias músicas e as músicas vinculadas aos seus eventos. | Pode criar (vão pertencer a ele mesmo). | Pode editar/deletar apenas as suas próprias músicas. |
+| **Usuário** | Apenas as suas próprias músicas. | Pode criar (vão pertencer a ele mesmo). | Pode editar/deletar apenas as suas próprias músicas. |
+
+#### 📅 Eventos (`/api/sonora/v1/events/`)
+| Nível de Acesso | Leitura (`GET`) | Criação (`POST`) | Edição / Deleção (`PUT`, `PATCH`, `DELETE`) |
+| :--- | :--- | :--- | :--- |
+| **Admin** | Acesso total a todos os eventos. | Criação irrestrita. | Acesso total a qualquer evento. |
+| **Gerente** | Apenas os próprios eventos vinculados a ele cujo `end_date >= hoje`. | Pode criar eventos (tornando-se o manager). | Pode editar/deletar apenas seus eventos que ainda não expiraram. |
+| **Usuário** | ⛔ Negado | ⛔ Negado | ⛔ Negado |
+
+#### 🔀 Ordem de Músicas do Evento (MusicOrder) (`/api/sonora/v1/music-order/`)
+*Substitui a antiga rota `link_event_music`.*
+
+| Nível de Acesso | Leitura (`GET`) | Criação (`POST`) | Edição / Deleção (`PUT`, `PATCH`, `DELETE`) |
+| :--- | :--- | :--- | :--- |
+| **Admin** | Acesso total. | Criação irrestrita. | Acesso total. |
+| **Gerente** | Apenas ligações de músicas de eventos que ele gerencia. | Pode adicionar suas próprias músicas aos seus eventos (desde que ativos). | Pode alterar/deletar ligações dos seus eventos não expirados. |
+| **Usuário** | ⛔ Negado | ⛔ Negado | ⛔ Negado |
 
 ---
 
@@ -335,184 +380,10 @@ end_date >= hoje
 
 ---
 
-## Permissões
+## 🔐 Resumo do Controle de Acesso Baseado em Papéis (RBAC)
 
-### Admin
-
-* acesso total
-
-### Gerente (Staff)
-
-* pode gerenciar eventos vinculados a ele
-
-### Usuário comum
-
-* acesso restrito ao próprio perfil e músicas vinculadas
-
----
-
-# 🧩 Estrutura de Dados
-
-Consulte o arquivo:
-
-```text
-models.py
-```
-
-para visualizar os campos exatos de cada recurso.
-
----
-
-# 📌 Fluxo de Uso
-
-* Administrador cria gerente.
-  (POST: `/api/sonora/v1/users/`)
-
-![alt text](docs/images/adm-cria-gerente.png)
-
----
-
-* Gerente faz login.
-  (POST: `/api/sonora/v1/token/`)
-
-![alt text](docs/images/adm-cria-gerente.png)
-
----
-
-* Gerente adiciona música.
-  (POST: `/api/sonora/v1/musics/`)
-
-![alt text](docs/images/gerente-adiciona-musica.png)
-
----
-
-* Gerente cria evento.
-  (Por padrão, o evento criado é vinculado ao gerente que o criou.)
-
-(POST: `/api/sonora/v1/events/`)
-
-![alt text](docs/images/gerente-cria-evento.png)
-
----
-
-* Vínculo entre músicas e evento.
-  (POST: `/api/sonora/v1/link_event_music/`)
-
-![alt text](docs/images/link-entre-evento-e-musica.png)
-
----
-
-* Informações do próprio usuário.
-  (GET: `/api/sonora/v1/users/`)
-
-```json
-[
-  {
-    "id": "c05895aa-2076-43c6-8c99-1af99e71f4f0",
-    "username": "manager",
-    "email": "",
-    "plan": {
-      "id": 40,
-      "created_at": "2026-05-09T18:39:40.983619Z",
-      "updated_at": "2026-05-09T18:39:40.983662Z",
-      "name": "anual",
-      "start_date": "2026-05-09T18:39:40.983412Z",
-      "end_date": "2027-05-09T18:39:40.983412Z"
-    },
-    "is_manager": true,
-    "is_admin": false,
-    "is_staff": false,
-    "my_events": [
-      {
-        "id": "0ccfe802-b33f-4989-94a7-0ccb8ff26811",
-        "event_id": "78382c59-ac0c-4292-85f6-1af4c702f809",
-        "music_id": "a3e58d2b-7c85-41ff-8098-5efe7d144813",
-        "event_name": "Festa de 115",
-        "music_name": "Exemplo musical",
-        "url": "https://music.com"
-      }
-    ],
-    "my_sounds": [
-      {
-        "created_at": "2026-05-09T18:45:05.001802Z",
-        "updated_at": "2026-05-09T18:45:05.001836Z",
-        "id": "e0411112-0420-4a47-a112-2d1a1611a97a",
-        "name": "Exemplo musical",
-        "url": "https://musics.com",
-        "user_id": "c05895aa-2076-43c6-8c99-1af99e71f4f0",
-        "observation": null,
-        "is_active": true
-      }
-    ]
-  }
-]
-```
-
----
-
-# 🗄️ Database
-
-## Diagrama de entidades (DBML)
-
-[https://dbdiagram.io/](https://dbdiagram.io/)
-
-```dbml
-Table plans {
-  id integer [pk, increment]
-  name varchar(50) [not null]
-  start_date datetime
-  end_date datetime
-  created_at datetime [not null]
-  updated_at datetime [not null]
-}
-
-Table users {
-  id uuid [pk]
-  username varchar(150) [not null]
-  password varchar(128) [not null]
-  first_name varchar(150)
-  last_name varchar(150)
-  email varchar(254)
-  is_staff boolean [default: false]
-  is_superuser boolean [default: false]
-  is_active boolean [default: true]
-
-  plan_id integer [ref: > plans.id]
-  is_admin boolean [default: false]
-  is_manager boolean [default: false]
-}
-
-Table youtube_musics {
-  id uuid [pk]
-  name varchar(100) [not null]
-  url varchar(255) [not null]
-  user_id uuid [ref: > users.id]
-  observation varchar(255)
-  is_active boolean [default: true]
-  created_at datetime [not null]
-  updated_at datetime [not null]
-
-  indexes {
-    (name, url) [unique]
-  }
-}
-```
-
----
-
-## SQL
-
-```sql
-CREATE DATABASE IF NOT EXISTS sonoradb;
-USE sonoradb;
-
-CREATE TABLE IF NOT EXISTS plans (
-    id INTEGER PRIMARY KEY AUTO_INCREMENT,
-    name VARCHAR(50) NOT NULL,
-    start_date DATETIME NULL,
-    end_date DATETIME NULL,
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-```
+A API utiliza uma abordagem rígida de permissões. A base de segurança garante que:
+1. **Isolamento de Tenant Parcial:** Os usuários comuns nunca enxergam dados de outros usuários. Suas requisições limitam-se restritamente ao que são donos (Owner).
+2. **Ciclo de Vida de Eventos:** Gerentes (Managers) perdem capacidade de alteração ou inserção de dados em Eventos (e suas Músicas vinculadas) assim que a data atual ultrapassa o encerramento do evento (`end_date`).
+3. **Plano Obrigatório:** Nenhuma das regras acima é alcançada se o `Plan` do usuário estiver expirado no momento da requisição.
 

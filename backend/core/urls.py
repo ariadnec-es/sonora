@@ -6,7 +6,7 @@ from rest_framework_simplejwt.views import (
     TokenRefreshView,
 )
 
-from sonoraAPI.views import ping, renew_plan
+from sonoraAPI.viewsets.utils import ping, renew_plan
 from core import settings
 
 API_PREFIX = "api/sonora/v1/"

@@ -1,7 +1,9 @@
 from rest_framework.exceptions import ValidationError
+
 from ..models import MusicOrder
 from ..serializers.music_orders import MusicOrderSerializer
 from .base import BaseViewSet
+
 
 class MusicOrderViewSet(BaseViewSet):
     serializer_class = MusicOrderSerializer
@@ -43,6 +45,8 @@ class MusicOrderViewSet(BaseViewSet):
                 {"event": "Não é possível adicionar músicas a um evento finalizado."}
             )
 
+        # TODO: Corrigir para: manager (gerente) pode adicionar musicas mesmo ele mesmo não
+        # as enviando
         # Regra 3: O manager só pode adicionar músicas que pertencem a ele
         if music.user != user:
             raise ValidationError(

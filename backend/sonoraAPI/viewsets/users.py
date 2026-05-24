@@ -1,7 +1,9 @@
 from rest_framework.response import Response
-from ..models import User, Plan, PlanChoices
+
+from ..models import Plan, PlanChoices, User
 from ..serializers.users import UserSerializer
 from .base import BaseViewSet
+
 
 class UserViewSet(BaseViewSet):
     serializer_class = UserSerializer
@@ -23,6 +25,8 @@ class UserViewSet(BaseViewSet):
         Apenas admin pode criar usuários
         """
 
+        # TODO: Corrigir para: Qualquer pessoa pode criar um usuário para
+        # si
         if not self.is_admin():
             self.deny()
 

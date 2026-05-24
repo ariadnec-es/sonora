@@ -1,6 +1,9 @@
 from datetime import date
+
 from rest_framework import permissions, viewsets
+
 from ..permissions import HasValidPlanPermission
+
 
 class BaseViewSet(viewsets.ModelViewSet):
     """
@@ -48,11 +51,11 @@ class BaseViewSet(viewsets.ModelViewSet):
         if safe_filters:
             try:
                 queryset = queryset.filter(**safe_filters)
-            except Exception:
+            except Exception as _:
                 pass
         return queryset
 
-    def can_delete(self, instance):
+    def can_delete(self, instance) -> bool:
         """
         Pode ser sobrescrito nas subclasses
         """

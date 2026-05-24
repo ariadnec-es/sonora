@@ -4,7 +4,9 @@ from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+
 from ..models import Plan, PlanChoices
+
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
@@ -16,12 +18,11 @@ def renew_plan(request):
         )
 
     user = request.user
-
     new_plan = request.data.get("new_plan", "experimentacao")
 
     if new_plan not in PlanChoices.values:
         return Response(
-            {"error": "Plano inválido"},
+            {"error": f"Plano inválido. Opções {PlanChoices.values}"},
             status=status.HTTP_400_BAD_REQUEST,
         )
 

@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cadastro de Gerente - Sonora</title>
+    <link rel="stylesheet" href="style/style.css">
+    <style>
+        .register-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .register-card {
+            width: 100%;
+            max-width: 420px;
+            background: #1f2937;
+            border-radius: 16px;
+            padding: 28px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+            color: #f8fafc;
+        }
+        .register-card h2 {
+            margin-bottom: 16px;
+            font-size: 24px;
+        }
+        .register-card p {
+            margin-bottom: 24px;
+            color: #94a3b8;
+        }
+        .register-card input,
+        .register-card select,
+        .register-card button {
+            width: 100%;
+            border-radius: 10px;
+            border: 1px solid #334155;
+            background: #0f172a;
+            color: #f8fafc;
+            padding: 12px 14px;
+            margin-bottom: 14px;
+            box-sizing: border-box;
+        }
+        .register-card button {
+            background: #2563eb;
+            border: none;
+            cursor: pointer;
+            font-weight: 700;
+        }
+        .register-card button:hover {
+            background: #1d4ed8;
+        }
+        .register-card .info {
+            font-size: 14px;
+            color: #cbd5e1;
+            margin-bottom: 16px;
+        }
+        .register-card .link {
+            color: #93c5fd;
+            text-decoration: none;
+        }
+        .error-message {
+            color: #f87171;
+            margin-bottom: 12px;
+            font-size: 14px;
+        }
+        .success-message {
+            color: #4ade80;
+            margin-bottom: 12px;
+            font-size: 14px;
+        }
+        .events-list {
+            max-height: 180px;
+            overflow-y: auto;
+            margin-bottom: 14px;
+            padding-right: 8px;
+        }
+        .events-list label {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+            color: #e2e8f0;
+        }
+    </style>
+</head>
+<body>
+    <div class="register-container">
+        <div class="register-card">
+            <h2>Cadastro de Gerente</h2>
+            <p>Cadastre um novo gerente e vincule-o aos eventos que ele poderá gerenciar.</p>
+            <div id="message" class="info"></div>
+
+            <form id="register-form">
+                <input type="text" id="username" placeholder="Nome de usuário" required>
+                <input type="email" id="email" placeholder="E-mail" required>
+                <input type="password" id="password" placeholder="Senha" required>
+                <input type="password" id="confirm-password" placeholder="Confirmar senha" required>
+
+                <div class="events-list" id="event-selection">Carregando eventos...</div>
+
+                <button type="submit" id="register-btn">Cadastrar Gerente</button>
+            </form>
+
+            <p class="info">Apenas administradores podem cadastrar gerentes. <a class="link" href="admin_gerentes.html">Voltar para painel</a></p>
+        </div>
+    </div>
+
+    <script src="js/api.js"></script>
+    <script>
+        const currentUser = getUser();
+        if (!currentUser || !currentUser.is_admin) {
+            window.location.href = 'login.html';
+        }
+
+        async function loadEvents() {
+            try {
+                const events = await apiRequest('/events/');
+                const container = document.getElementById('event-selection');
+                container.innerHTML = '';
+
+                if (!events || events.length === 0) {
+                    container.innerHTML = '<p>Nenhum evento ativo disponível.</p>';
+                    return;
+                }
+
+                events.forEach((event) => {
+                    const label = document.createElement('label');
+                    label.innerHTML = `
+                        <input type="checkbox" name="events" value="${event.id}">
+                        ${event.event_name}
+                    `;
+                    container.appendChild(label);
+                });
+            } catch (err) {
+                console.error(err);
+                document.getElementById('event-selection').innerHTML = '<p>Erro ao carregar eventos.</p>';
+            }
+        }
+
+        document.getElementById('register-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const message = document.getElementById('message');
+            const btn = document.getElementById('register-btn');
+            message.innerText = '';
+            message.className = 'info';
+
+            const username = document.getElementById('username').value.trim();
+            const email = document.getElementById('email').value.trim();
+            const password = document.getElementById('password').value;
+            const confirmPassword = document.getElementById('confirm-password').value;
+            const eventIds = Array.from(document.querySelectorAll('input[name="events"]:checked')).map((cb) => cb.value);
+
+            if (password !== confirmPassword) {
+                message.innerText = 'As senhas não coincidem.';
+                message.className = 'error-message';
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerText = 'Cadastrando...';
+
+            try {
+                await apiRequest('/users/', 'POST', {
+                    username,
+                    email,
+                    password,
+                    is_manager: true,
+                    event_ids: eventIds,
+                    plan: 'experimentacao'
+                });
+
+                message.innerText = 'Gerente cadastrado com sucesso!';
+                message.className = 'success-message';
+                document.getElementById('register-form').reset();
+                loadEvents();
+            } catch (err) {
+                message.innerText = 'Erro: ' + err.message;
+                message.className = 'error-message';
+            } finally {
+                btn.disabled = false;
+                btn.innerText = 'Cadastrar Gerente';
+            }
+        });
+
+        loadEvents();
+    </script>
+</body>
+</html>

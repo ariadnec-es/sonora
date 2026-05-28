@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Sonora</title>
+    <link rel="stylesheet" href="style/style.css">
+    <style>
+        .login-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+        }
+        .error-message {
+            color: #ef4444;
+            margin-top: 10px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="app">
+            <h2>Sonora</h2>
+            <p>Acesse sua conta</p>
+            <form id="login-form">
+                <input type="text" id="username" placeholder="E-mail ou Usuário" required>
+                <input type="password" id="password" placeholder="Senha" required>
+                <button type="submit" id="login-btn">Entrar</button>
+                <p id="error" class="error-message hidden"></p>
+                <p class="info" style="margin-top: 16px; color: #94a3b8; font-size: 14px;">
+                    <a href="register.html" style="color: #93c5fd; text-decoration: none;">Cadastrar gerente</a>
+                </p>
+            </form>
+        </div>
+    </div>
+
+    <script src="js/api.js"></script>
+    <script>
+        document.getElementById('login-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const errorEl = document.getElementById('error');
+            const btn = document.getElementById('login-btn');
+
+            btn.disabled = true;
+            btn.innerText = 'Entrando...';
+            errorEl.classList.add('hidden');
+
+            try {
+                const user = await login(username, password);
+                console.log(user)
+                if (user.is_admin) {
+                    window.location.href = 'admin_gerentes.html';
+                } else if (user.is_manager) {
+                    window.location.href = 'midia.html';
+                } else {
+                    window.location.href = 'index.html';
+                }
+            } catch (err) {
+                errorEl.innerText = err.message;
+                errorEl.classList.remove('hidden');
+            } finally {
+                btn.disabled = false;
+                btn.innerText = 'Entrar';
+            }
+        });
+    </script>
+</body>
+</html>

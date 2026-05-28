@@ -1,6 +1,6 @@
 from django.db.models import F
 from rest_framework import serializers
-from ..models import User, YoutubeMusic, Event, MusicOrder
+from ..models import User, YoutubeMusic, Event, Folder, MusicOrder
 from .plans import PlanSerializer
 
 class UserSerializer(serializers.ModelSerializer):
@@ -27,50 +27,64 @@ class UserSerializer(serializers.ModelSerializer):
         }
 
     def get_my_events(self, instance):
-        """Eventos e músicas"""
+        """Eventos, músicas e pastas"""
         
-        # 1. Pega os IDs dos eventos
-        events_id = Event.objects.filter(manager=instance, is_active=True).values_list("id", flat=True)
+        # 1. Pega os eventos ativos gerenciados pelo usuário
+        events = Event.objects.filter(manager=instance, is_active=True)
+        events_id = events.values_list("id", flat=True)
         
-        # 2. Query Plana
+        # 2. Query de Músicas (MusicOrder)
         flat_data = MusicOrder.objects.filter(
             event__in=events_id,
+            is_active=True
         ).annotate(
+            music_pk=F("music__id"),
             music_name=F("music__name"),
             music_url=F("music__url"),
+            music_file=F("music__file"),
             event_name=F("event__event_name"),
             event_start_date=F("event__start_date"),
             event_end_date=F("event__end_date"),
             singer=F("music__singer"),
             duration=F("music__duration"),
         ).values(
-            "event", # Esse é o ID do evento (útil para agrupar)
-            "event_name", 
-            "music_name",
-            "music_url",
-            "event_start_date",
-            "event_end_date",
-            "singer",
-            "duration",
-            "order",
-        ).order_by("event", "order") # Melhor ordenar por evento primeiro, depois por ordem
+            "id", "event", "event_name", "music_pk", "music_name",
+            "music_url", "music_file", "event_start_date", "event_end_date",
+            "singer", "duration", "order", "status", "category", "folder"
+        ).order_by("event", "order")
+
+        # 3. Query de Pastas
+        folders_data = list(Folder.objects.filter(event__in=events_id).values(
+            "id", "name", "parent", "event"
+        ))
 
         grouped_events = {}
+        for event in events:
+            grouped_events[event.id] = {
+                "event_id": event.id,
+                "event_name": event.event_name,
+                "event_start_date": event.start_date,
+                "event_end_date": event.end_date,
+                "musics": [],
+                "folders": [f for f in folders_data if f["event"] == event.id]
+            }
 
         for row in flat_data:
             event_id = row["event"]
-            
-            if event_id not in grouped_events:
-                grouped_events[event_id] = {
-                    "event_id": event_id, # Sempre bom mandar o ID para o front-end
-                    "event_name": row["event_name"], # Corrigido: usando o nome anotado
-                    "event_start_date": row["event_start_date"],
-                    "event_end_date": row["event_end_date"],
-                    "musics": {} 
-                }
-            
-            # Adiciona a música na ordem correspondente
-            grouped_events[event_id]["musics"][row["order"]] = row["music_url"]
+            if event_id in grouped_events:
+                grouped_events[event_id]["musics"].append({
+                    "id": row["id"], # ID do MusicOrder
+                    "music_id": row["music_pk"],
+                    "name": row["music_name"],
+                    "url": row["music_url"],
+                    "file": row["music_file"],
+                    "singer": row["singer"],
+                    "duration": row["duration"],
+                    "order": row["order"],
+                    "status": row["status"],
+                    "category": row["category"],
+                    "folder": row["folder"]
+                })
             
         return list(grouped_events.values())
 
@@ -87,6 +101,11 @@ class UserSerializer(serializers.ModelSerializer):
         return user
 
     def update(self, instance, validated_data):
+        request = self.context.get("request")
+        if not (request and request.user.is_authenticated and request.user.is_admin):
+            validated_data.pop("is_manager", None)
+            validated_data.pop("is_admin", None)
+
         password = validated_data.pop("password", None)
         user = super().update(instance, validated_data)
         if password:

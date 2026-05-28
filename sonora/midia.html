@@ -15,13 +15,81 @@
 </head>
 
 <body>
+    <div style="display: flex; justify-content: space-between; align-items: center; padding: 20px;">
+        <h1 class="titulo">PAINEL DA MÍDIA</h1>
+        <div class="header-actions">
+            <select id="event-selector" onchange="switchEvent()">
+                <option value="">Carregando eventos...</option>
+            </select>
+            <button onclick="logout()" style="background: #ef4444; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer;">Sair</button>
+        </div>
+    </div>
 
-    <h1 class="titulo">PAINEL DA MÍDIA</h1>
+    <div class="tabs">
+        <div class="tab active" id="tab-interactive" onclick="switchTab('interactive')">Reações de Público</div>
+        <div class="tab" id="tab-background" onclick="switchTab('background')">Músicas de Fundo</div>
+    </div>
+
+    <div id="folder-container" class="folder-tree">
+        <h3>Pastas</h3>
+        <div id="folder-list"></div>
+        <button class="btn-small btn-edit" onclick="showFolderModal()">+ Nova Pasta</button>
+    </div>
 
     <div id="lista"></div>
 
-    <script src="js/midia.js"></script>
+    <!-- Modal para Editar Música -->
+    <div id="edit-modal" class="modal">
+        <div class="modal-content">
+            <h3 id="modal-title">Editar Música</h3>
+            <input type="hidden" id="edit-id">
+            <label>Nome:</label>
+            <input type="text" id="edit-name">
+            <label>Cantor:</label>
+            <input type="text" id="edit-singer">
+            <label>Ordem:</label>
+            <input type="number" id="edit-order" min="1" max="30">
+            <label>Categoria:</label>
+            <select id="edit-category">
+                <option value="interactive">Reações de Público</option>
+                <option value="background">Música de Fundo</option>
+            </select>
+            <label>Status:</label>
+            <select id="edit-status">
+                <option value="pending">Pendente</option>
+                <option value="accepted">Aceita</option>
+                <option value="rejected">Rejeitada</option>
+            </select>
+            <label>Pasta:</label>
+            <select id="edit-folder">
+                <option value="">Sem Pasta</option>
+            </select>
+            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                <button onclick="saveEdit()" style="background: #22c55e; flex: 1; padding: 10px;">Salvar</button>
+                <button onclick="closeModal()" style="background: #64748b; flex: 1; padding: 10px;">Cancelar</button>
+            </div>
+        </div>
+    </div>
 
+    <!-- Modal para Pasta -->
+    <div id="folder-modal" class="modal">
+        <div class="modal-content">
+            <h3 id="folder-modal-title">Nova Pasta</h3>
+            <input type="hidden" id="edit-folder-id">
+            <input type="text" id="folder-name" placeholder="Nome da Pasta">
+            <label>Pasta Pai (Opcional):</label>
+            <select id="folder-parent">
+                <option value="">Raiz</option>
+            </select>
+            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                <button id="folder-save-btn" onclick="saveFolder()" style="background: #22c55e; flex: 1; padding: 10px;">Criar</button>
+                <button onclick="closeFolderModal()" style="background: #64748b; flex: 1; padding: 10px;">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/api.js"></script>
+    <script src="js/midia.js"></script>
 </body>
 
 </html>

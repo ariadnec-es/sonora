@@ -123,7 +123,7 @@ class TestViewPermissions(BaseTestSetup):
         response = self.client.post("/api/sonora/v1/events/", payload, format="json")
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
-        self.authenticate(self.manager_user)
+        self.authenticate(self.admin_user)
         response = self.client.post("/api/sonora/v1/events/", payload, format="json")
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 

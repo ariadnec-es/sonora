@@ -1,0 +1,169 @@
+.contanier {
+  width: 100%;
+  max-width: 420px;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  padding: var(--space-2xl);
+  border-radius: var(--radius-2xl);
+  box-shadow: var(--shadow-xl);
+  backdrop-filter: blur(10px);
+  position: relative;
+  overflow: hidden;
+}
+
+.contanier::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.05) 0%, rgba(16, 185, 129, 0.05) 100%);
+  pointer-events: none;
+}
+
+.contanier form {
+  position: relative;
+  z-index: 1;
+}
+
+.contanier h1 {
+  text-align: center;
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-primary);
+  margin-bottom: var(--space-2xl);
+  letter-spacing: -0.5px;
+}
+
+.contanier .input-field {
+  position: relative;
+  width: 100%;
+  margin: var(--space-lg) 0;
+}
+
+.input-field input {
+  width: 100%;
+  padding: var(--space-lg) var(--space-lg) var(--space-lg) var(--space-lg);
+  background-color: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  font-size: var(--font-size-base);
+  color: var(--color-text-primary);
+  outline: none;
+  transition: all var(--transition-base);
+}
+
+.input-field input::placeholder {
+  color: var(--color-text-tertiary);
+}
+
+.input-field input:hover {
+  border-color: var(--color-border-hover);
+  background-color: var(--color-bg-elevated);
+}
+
+.input-field input:focus {
+  border-color: var(--color-primary);
+  background-color: var(--color-bg-elevated);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.input-field input:focus::placeholder {
+  color: transparent;
+}
+
+.input-field .icon {
+  position: absolute;
+  right: var(--space-lg);
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: var(--font-size-lg);
+  color: var(--color-text-tertiary);
+  pointer-events: none;
+  transition: color var(--transition-base);
+}
+
+.input-field input:focus ~ .icon {
+  color: var(--color-primary);
+}
+
+.error-message {
+  color: var(--color-error);
+  font-size: var(--font-size-sm);
+  margin-top: var(--space-sm);
+  font-weight: var(--font-weight-medium);
+  animation: slideInUp 300ms ease-out;
+}
+
+@keyframes slideInUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.contanier button {
+  width: 100%;
+  padding: var(--space-lg) var(--space-md);
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
+  border: none;
+  border-radius: var(--radius-lg);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  color: white;
+  cursor: pointer;
+  outline: none;
+  box-shadow: var(--shadow-lg);
+  transition: all var(--transition-base);
+  margin-top: var(--space-lg);
+}
+
+.contanier button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 20px 25px -5px rgba(59, 130, 246, 0.3);
+}
+
+.contanier button:active {
+  transform: translateY(0);
+  box-shadow: var(--shadow-md);
+}
+
+.contanier button:focus {
+  box-shadow: var(--shadow-lg), 0 0 0 3px rgba(59, 130, 246, 0.2);
+}
+
+.contanier .signup-link {
+  font-size: var(--font-size-sm);
+  text-align: center;
+  margin-top: var(--space-lg);
+  color: var(--color-text-secondary);
+}
+
+.signup-link a {
+  color: var(--color-primary);
+  text-decoration: none;
+  font-weight: var(--font-weight-medium);
+  transition: all var(--transition-base);
+}
+
+.signup-link a:hover {
+  color: var(--color-primary-light);
+  text-decoration: underline;
+}
+
+@media (max-width: 768px) {
+  .contanier {
+    max-width: 100%;
+    padding: var(--space-xl);
+  }
+  
+  .contanier h1 {
+    font-size: var(--font-size-xl);
+    margin-bottom: var(--space-xl);
+  }
+}

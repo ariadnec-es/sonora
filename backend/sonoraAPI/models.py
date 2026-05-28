@@ -26,6 +26,17 @@ class PlanChoices(models.TextChoices):
     EXPERIMENTACAO = "experimentacao", "Experimentação"
 
 
+class MusicStatus(models.TextChoices):
+    PENDING = "pending", "Pendente"
+    ACCEPTED = "accepted", "Aceita"
+    REJECTED = "rejected", "Rejeitada"
+
+
+class MusicCategory(models.TextChoices):
+    INTERACTIVE = "interactive", "Reações"
+    BACKGROUND = "background", "Fundo"
+
+
 class Plan(TimestampModel):
     name = models.CharField(
         max_length=50, choices=PlanChoices.choices, default=PlanChoices.MENSAL
@@ -83,7 +94,8 @@ class User(AbstractUser):
 class YoutubeMusic(TimestampModel):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=100)
-    url = models.URLField(max_length=255)
+    url = models.URLField(max_length=255, blank=True, null=True)
+    file = models.FileField(upload_to="musics/", blank=True, null=True)
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -110,7 +122,7 @@ class Event(TimestampModel):
     start_date = models.DateField()
     end_date = models.DateField()
     event_name = models.CharField(max_length=100, unique=True)
-    location = models.CharField(max_length=100)
+    location = models.CharField(max_length=100, null=True, blank=True)
     manager = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -130,6 +142,21 @@ class Event(TimestampModel):
         db_table = "events"
 
 
+class Folder(TimestampModel):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=100)
+    parent = models.ForeignKey(
+        "self", on_delete=models.CASCADE, null=True, blank=True, related_name="subfolders"
+    )
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name="folders")
+
+    def __str__(self):
+        return f"Pasta: {self.name} - Evento: {self.event.event_name}"
+
+    class Meta(TimestampModel.Meta):
+        db_table = "folders"
+
+
 class MusicOrder(TimestampModel):
     id = models.UUIDField(
         primary_key=True, default=uuid.uuid4, editable=False, null=False, blank=False
@@ -141,6 +168,16 @@ class MusicOrder(TimestampModel):
     order = models.IntegerField(
         validators=[MinValueValidator(1), MaxValueValidator(30)]
     )
+    status = models.CharField(
+        max_length=20, choices=MusicStatus.choices, default=MusicStatus.PENDING
+    )
+    category = models.CharField(
+        max_length=20, choices=MusicCategory.choices, default=MusicCategory.INTERACTIVE
+    )
+    folder = models.ForeignKey(
+        Folder, on_delete=models.SET_NULL, null=True, blank=True, related_name="music_orders"
+    )
+    is_active = models.BooleanField(default=True)
 
     def __str__(self):
         return f"Ordem: {self.order} Evento: {self.event.event_name} | Musica {self.music.name}"
@@ -152,6 +189,6 @@ class MusicOrder(TimestampModel):
                 fields=["event", "music"], name="unique_event_music_combination"
             ),
             models.UniqueConstraint(
-                fields=["music", "order"], name="unique_music_order_combination"
+                fields=["event", "order"], name="unique_event_order_combination"
             ),
         ]

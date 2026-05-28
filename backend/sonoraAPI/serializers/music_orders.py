@@ -15,8 +15,23 @@ class MusicOrderSerializer(serializers.ModelSerializer):
             'music', 
             'event', 
             'order', 
+            'status',
+            'category',
+            'folder',
             'music_details', 
             'event_details', 
             'created_at', 
             'updated_at'
         ]
+
+    def validate(self, attrs):
+        music = attrs.get('music')
+        request = self.context.get('request')
+        if music and request:
+            user = request.user
+            if music.user is not None:
+                if not user.is_authenticated:
+                    raise serializers.ValidationError({"music": "Você não tem permissão para adicionar esta música."})
+                if not (user.is_admin or music.user == user):
+                    raise serializers.ValidationError({"music": "Esta música pertence a outro usuário."})
+        return attrs

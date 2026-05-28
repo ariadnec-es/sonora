@@ -19,10 +19,10 @@ class BaseViewSet(viewsets.ModelViewSet):
         return {"is_active": True}
 
     def is_admin(self):
-        return self.request.user.is_admin
+        return bool(getattr(self.request.user, "is_admin", False))
 
     def is_manager(self):
-        return self.request.user.is_manager
+        return bool(getattr(self.request.user, "is_manager", False))
 
     def today(self):
         return date.today()

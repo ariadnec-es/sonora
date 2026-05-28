@@ -1,4 +1,5 @@
 from django.db.models import Q
+from rest_framework import permissions
 from ..models import YoutubeMusic
 from ..serializers.musics import YoutubeMusicSerializer
 from .base import BaseViewSet
@@ -6,6 +7,11 @@ from .base import BaseViewSet
 class YoutubeMusicViewSet(BaseViewSet):
     serializer_class = YoutubeMusicSerializer
     queryset = YoutubeMusic.objects.none()
+
+    def get_permissions(self):
+        if self.action == 'create':
+            return [permissions.AllowAny()]
+        return super().get_permissions()
 
     def get_queryset(self):
         user = self.request.user
@@ -33,7 +39,8 @@ class YoutubeMusicViewSet(BaseViewSet):
         return YoutubeMusic.objects.filter(user=user, **base_filters)
 
     def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
+        user = self.request.user if self.request.user.is_authenticated else None
+        serializer.save(user=user)
 
     def can_delete(self, instance):
         user = self.request.user

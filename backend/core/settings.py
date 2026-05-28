@@ -8,7 +8,10 @@ load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = os.getenv("SECRET_KEY", "qPpWy6NWh8TaTsYkcDNqzQ")
+# ✅ CORREÇÃO 1: Chave maior para sumir com o aviso do JWT (mínimo de 32 caracteres)
+SECRET_KEY = os.getenv(
+    "SECRET_KEY", "qPpWy6NWh8TaTsYkcDNqzQ_aumentando_tamanho_da_chave_aqui"
+)
 
 DEBUG = os.getenv("DEBUG", True)
 
@@ -21,6 +24,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "corsheaders",  # ✅ CORREÇÃO 2: App do CORS adicionado
     "rest_framework",
     "axes",
     "sonoraAPI",
@@ -29,6 +33,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
+    "corsheaders.middleware.CorsMiddleware",  # ✅ CORREÇÃO 3: CORS Middleware antes do CommonMiddleware
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -38,6 +43,9 @@ MIDDLEWARE = [
     "axes.middleware.AxesMiddleware",
     "core.middleware.MiddleWare",
 ]
+
+# ✅ CORREÇÃO 4: Permitir requisições de outras origens (rede local/celular)
+CORS_ALLOW_ALL_ORIGINS = True
 
 ROOT_URLCONF = "core.urls"
 
@@ -59,22 +67,6 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "core.wsgi.application"
 
-# Banco de dados MySQL
-# DATABASES = {
-#     'default': {
-#         'ENGINE': 'django.db.backends.mysql',
-#         'NAME': 'sonoraDB',
-#         'USER': 'root',
-#         'PASSWORD': '2001',
-#         'HOST': '127.0.0.1',  # 👈 nome do serviço
-#         'PORT': '3306',
-#         'OPTIONS': {
-#             'charset': 'utf8mb4',
-#             'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
-#         },
-#     }
-# }
-
 # Protótipo SQLite3
 DATABASES = {
     "default": {
@@ -93,18 +85,11 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 LANGUAGE_CODE = "pt-br"
-
 TIME_ZONE = "UTC"
-
 USE_I18N = True
-
 USE_TZ = True
-
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-# =========================
-# DJANGO REST FRAMEWORK
-# =========================
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
         "rest_framework_simplejwt.authentication.JWTAuthentication",
@@ -112,9 +97,6 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
 }
 
-# =========================
-# SIMPLE JWT
-# =========================
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=30),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=1),
@@ -122,24 +104,15 @@ SIMPLE_JWT = {
     "AUTH_TOKEN_CLASSES": ("rest_framework_simplejwt.tokens.AccessToken",),
 }
 
-
-# =========================
-# DJANGO-AXES
-# =========================
-
 AUTHENTICATION_BACKENDS = [
     "axes.backends.AxesBackend",
     "django.contrib.auth.backends.ModelBackend",
 ]
 
 AUTH_USER_MODEL = "sonoraAPI.User"
-
 AXES_FAILURE_LIMIT = 5 if not DEBUG else 100
-
 AXES_COOLOFF_TIME = timedelta(minutes=30)
-
 AXES_LOCKOUT_PARAMETERS = ["ip_address", "username"]
-
 AXES_RESET_ON_SUCCESS = True
 
 LOGGING = {
@@ -159,11 +132,7 @@ LOGGING = {
     },
 }
 
-# Arquivos estáticos e media
 STATIC_URL = "static/"
-
 STATIC_ROOT = BASE_DIR / "staticfiles"
-
 MEDIA_URL = "media/"
-
 MEDIA_ROOT = BASE_DIR / "media"

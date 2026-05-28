@@ -76,6 +76,10 @@ class User(AbstractUser):
         db_table = "users"
 
 
+# TODO: A listagem de musicas deve poder mostrar a qual evento ele deve ser
+# vinculado, um estágio anterior antes da confirmação do manager em aceitar
+# ou não a musica
+# TODO: A musica deve ter flag para ser de interação ou background
 class YoutubeMusic(TimestampModel):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=100)
@@ -100,11 +104,13 @@ class YoutubeMusic(TimestampModel):
         ]
 
 
+# NOTE: O usuário pode criar evento?
 class Event(TimestampModel):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     start_date = models.DateField()
     end_date = models.DateField()
-    event_name = models.CharField(max_length=100)
+    event_name = models.CharField(max_length=100, unique=True)
+    location = models.CharField(max_length=100)
     manager = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,

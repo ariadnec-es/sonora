@@ -18,17 +18,12 @@ https://github.com/ariadnec-es/sonora/issues/2#issue-4376474080
 ---
 
 ## Critérios de Aceitação
+
 1. O cadastro deve conter: nome, e-mail, senha, eventos aos quais terá acesso.
 2. Um mesmo usuário gerente pode ser vinculado a múltiplos eventos.
 3. A senha deve ser armazenada de forma criptografada.
 4. O usuário gerente só enxergará os eventos a que foi vinculado.
 
-## Branch
+## Brench
 
 feature/US02-cadastrar-usuario-gerente
-
-- Inserir usuário gerente:
-![alt text](images/doc/criar-gerente.png)
-
-- Vincular gerente com evento:
-![alt text](images/doc/vinculargerente.png)

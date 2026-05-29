@@ -14,6 +14,7 @@ export interface CreateEventPayload {
   start_date: string
   end_date: string
   location?: string
+  manager?: string | null
 }
 
 export async function createEvent(payload: CreateEventPayload): Promise<ApiEvent> {

@@ -20,7 +20,8 @@ export default function EventCard({ event, canManage = true, onEdit, onDelete, o
 
       <div className="event-card-meta">
         <p><strong>Organizador:</strong> {event.organizer}</p>
-        <p><strong>Data:</strong> {new Date(event.date).toLocaleDateString('pt-BR')}</p>
+        <p><strong>Início:</strong> {new Date(event.startDate).toLocaleDateString('pt-BR')}</p>
+        <p><strong>Fim:</strong> {new Date(event.endDate).toLocaleDateString('pt-BR')}</p>
         <p><strong>Músicas:</strong> {event.musicCount}</p>
       </div>
 

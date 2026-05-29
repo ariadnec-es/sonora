@@ -3,7 +3,9 @@ export interface EventItem {
   apiId?: string          // UUID do backend
   name: string
   organizer: string
-  date: string
+  managerId?: string      // ID do gerente no backend
+  startDate: string
+  endDate: string
   status: 'ativo' | 'inativo'
   musicCount: number
   project?: string

@@ -52,6 +52,9 @@ class EventViewSet(BaseViewSet):
         if instance.end_date < self.today():
             self.deny()
 
+        # Garante que gerente não mude o dono do evento
+        serializer.validated_data.pop("manager", None)
+
         serializer.save()
 
     def can_delete(self, instance):

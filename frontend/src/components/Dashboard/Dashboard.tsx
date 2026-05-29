@@ -26,7 +26,8 @@ const DEFAULT_EVENTS: EventItem[] = [
     id: 1,
     name: 'Cerimônia de Abertura',
     organizer: 'Ana Santos',
-    date: '2026-06-10',
+    startDate: '2026-06-10',
+    endDate: '2026-06-10',
     status: 'ativo',
     musicCount: 3,
     project: 'Cerimônia de Abertura',
@@ -35,7 +36,8 @@ const DEFAULT_EVENTS: EventItem[] = [
     id: 2,
     name: 'Recepção dos convidados',
     organizer: 'Lucas Mendes',
-    date: '2026-06-10',
+    startDate: '2026-06-10',
+    endDate: '2026-06-10',
     status: 'ativo',
     musicCount: 1,
     project: 'Recepção dos convidados',
@@ -44,7 +46,8 @@ const DEFAULT_EVENTS: EventItem[] = [
     id: 3,
     name: 'Espaço de dança',
     organizer: 'Marina Costa',
-    date: '2026-06-11',
+    startDate: '2026-06-11',
+    endDate: '2026-06-11',
     status: 'ativo',
     musicCount: 0,
     project: 'Espaço de dança',
@@ -204,7 +207,8 @@ export default function Dashboard({ setScreen }: DashboardProps) {
   const [adminSelectedRole, setAdminSelectedRole] = useState<UserRole>('cliente')
   const [adminSelectedProjects, setAdminSelectedProjects] = useState<string[]>([])
   const [showEventChecklist, setShowEventChecklist] = useState(false)
-  const [eventForm, setEventForm] = useState({ name: '', organizer: '', date: '' })
+  const [managers, setManagers] = useState<ApiUser[]>([])
+  const [eventForm, setEventForm] = useState({ name: '', organizer: '', startDate: '', endDate: '', managerId: '' })
 
   const refreshAdminUsers = async () => {
     if (getAccessToken() && userRole === 'admin') {
@@ -257,8 +261,10 @@ export default function Dashboard({ setScreen }: DashboardProps) {
           id: i + 1,
           apiId: e.id,
           name: e.event_name,
-          organizer: e.manager ?? '',
-          date: e.end_date,
+          organizer: e.manager_username ?? e.manager ?? '',
+          managerId: e.manager ?? '',
+          startDate: e.start_date,
+          endDate: e.end_date,
           status: e.is_active ? 'ativo' : 'inativo',
           musicCount: 0,
         }))
@@ -442,9 +448,17 @@ export default function Dashboard({ setScreen }: DashboardProps) {
     return filtered
   }, [activeTab, events, filterType, musics, search, sortBy, userRole, visibleEventNames])
 
-  function openNewEvent() {
+  async function openNewEvent() {
     setEditingEventId(null)
-    setEventForm({ name: '', organizer: '', date: '' })
+    setEventForm({ name: '', organizer: '', startDate: '', endDate: '', managerId: '' })
+    if (userRole === 'admin') {
+      try {
+        const managersList = await fetchUsers(true)
+        setManagers(managersList)
+      } catch {
+        toast.error('Falha ao carregar gerentes.')
+      }
+    }
     setShowEventModal(true)
   }
 
@@ -454,12 +468,14 @@ export default function Dashboard({ setScreen }: DashboardProps) {
     const duplicateEvent = events.some((item) =>
       item.id !== editingEventId &&
       normalizeText(item.name) === normalizeText(eventForm.name) &&
-      item.date === eventForm.date
+      item.endDate === eventForm.endDate
     )
     if (duplicateEvent) {
       toast.error('Já existe um evento igual cadastrado.')
       return
     }
+
+    const selectedManager = managers.find(m => m.id === eventForm.managerId)
 
     if (editingEventId) {
       const existing = events.find(e => e.id === editingEventId)
@@ -467,7 +483,7 @@ export default function Dashboard({ setScreen }: DashboardProps) {
       setEvents((current) =>
         current.map((item) =>
           item.id === editingEventId
-            ? { ...item, name: eventForm.name, organizer: eventForm.organizer, date: eventForm.date,
+            ? { ...item, name: eventForm.name, organizer: selectedManager?.username || eventForm.organizer, managerId: eventForm.managerId, startDate: eventForm.startDate, endDate: eventForm.endDate,
                 musicCount: musics.filter((m) => m.eventId === item.id).length }
             : item
         )
@@ -477,7 +493,9 @@ export default function Dashboard({ setScreen }: DashboardProps) {
       if (existing?.apiId) {
         updateEvent(existing.apiId, {
           event_name: eventForm.name,
-          end_date: eventForm.date,
+          start_date: eventForm.startDate,
+          end_date: eventForm.endDate,
+          manager: eventForm.managerId || null
         }).catch(() => toast.error('Falha ao sincronizar evento com o servidor.'))
       }
     } else {
@@ -485,8 +503,10 @@ export default function Dashboard({ setScreen }: DashboardProps) {
       const newEvent: EventItem = {
         id: localId,
         name: eventForm.name,
-        organizer: eventForm.organizer,
-        date: eventForm.date,
+        organizer: selectedManager?.username || eventForm.organizer,
+        managerId: eventForm.managerId,
+        startDate: eventForm.startDate,
+        endDate: eventForm.endDate,
         status: 'ativo',
         musicCount: 0,
       }
@@ -496,8 +516,9 @@ export default function Dashboard({ setScreen }: DashboardProps) {
       if (getAccessToken()) {
         createEvent({
           event_name: eventForm.name,
-          start_date: new Date().toISOString().split('T')[0],
-          end_date: eventForm.date,
+          start_date: eventForm.startDate,
+          end_date: eventForm.endDate,
+          manager: eventForm.managerId || null
         }).then((apiEvent) => {
           setEvents((current) =>
             current.map((e) => e.id === localId ? { ...e, apiId: apiEvent.id } : e)
@@ -507,17 +528,27 @@ export default function Dashboard({ setScreen }: DashboardProps) {
     }
 
     setShowEventModal(false)
-    setEventForm({ name: '', organizer: '', date: '' })
+    setEventForm({ name: '', organizer: '', startDate: '', endDate: '', managerId: '' })
     setEditingEventId(null)
   }
 
-  function handleEditEvent(event: EventItem) {
+  async function handleEditEvent(event: EventItem) {
     setEditingEventId(event.id)
     setEventForm({
       name: event.name,
       organizer: event.organizer,
-      date: event.date,
+      startDate: event.startDate,
+      endDate: event.endDate,
+      managerId: event.managerId || '',
     })
+    if (userRole === 'admin') {
+      try {
+        const managersList = await fetchUsers(true)
+        setManagers(managersList)
+      } catch {
+        toast.error('Falha ao carregar gerentes.')
+      }
+    }
     setShowEventModal(true)
   }
 
@@ -1309,23 +1340,38 @@ export default function Dashboard({ setScreen }: DashboardProps) {
                 />
               </label>
 
+              {userRole === 'admin' && (
+                <label className="field-block">
+                  <span>Gerente</span>
+                  <select
+                    value={eventForm.managerId}
+                    onChange={(event) => setEventForm((current) => ({ ...current, managerId: event.target.value }))}
+                  >
+                    <option value="">Selecione um gerente</option>
+                    {managers.map((manager) => (
+                      <option key={manager.id} value={manager.id}>{manager.username} ({manager.email})</option>
+                    ))}
+                  </select>
+                </label>
+              )}
+
               <label className="field-block">
-                <span>Organizador</span>
+                <span>Data de Início</span>
                 <input
-                  type="text"
+                  type="date"
                   required
-                  value={eventForm.organizer}
-                  onChange={(event) => setEventForm((current) => ({ ...current, organizer: event.target.value }))}
+                  value={eventForm.startDate}
+                  onChange={(event) => setEventForm((current) => ({ ...current, startDate: event.target.value }))}
                 />
               </label>
 
               <label className="field-block">
-                <span>Data</span>
+                <span>Data de Fim</span>
                 <input
                   type="date"
                   required
-                  value={eventForm.date}
-                  onChange={(event) => setEventForm((current) => ({ ...current, date: event.target.value }))}
+                  value={eventForm.endDate}
+                  onChange={(event) => setEventForm((current) => ({ ...current, endDate: event.target.value }))}
                 />
               </label>
 

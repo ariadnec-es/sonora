@@ -54,6 +54,12 @@ export default function MusicCard({
         <h3>{music.title}</h3>
         <p className="music-row-artist">{music.artist}</p>
         <p className="music-row-notes">{music.notes || 'Sem observações adicionais.'}</p>
+        
+        {music.youtubeLink && (
+          <p className="music-row-link">
+            <strong>Link:</strong> <a href={music.youtubeLink} target="_blank" rel="noopener noreferrer">{music.youtubeLink}</a>
+          </p>
+        )}
 
         <div className="music-row-meta">
           <span>{music.favorite ? 'Favoritado' : 'Normal'}</span>

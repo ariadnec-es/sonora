@@ -37,6 +37,7 @@ export interface ApiEvent {
   location?: string
   is_active: boolean
   manager: string | null
+  manager_username?: string
 }
 
 export interface ApiEventWithMusics {

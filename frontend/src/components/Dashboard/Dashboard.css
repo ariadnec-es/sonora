@@ -493,6 +493,22 @@ button, input, select, textarea {
   color: #8fa0bc;
 }
 
+.music-row-link {
+  margin: 8px 0 0;
+  font-size: 0.85rem;
+  color: #94a3b8;
+  word-break: break-all;
+}
+
+.music-row-link a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.music-row-link a:hover {
+  text-decoration: underline;
+}
+
 .music-row-topline {
   display: flex;
   align-items: center;

@@ -7,11 +7,19 @@ import MusicModal from '../MusicModal/MusicModal'
 import PlayerModal from '../PlayerModal/PlayerModal'
 import Sidebar, { type DashboardTab } from '../Sidebar/Sidebar'
 import Topbar from '../Topbar/Topbar'
-import { type StoredUser, type UserRole, loadUsers, saveUsers } from '../../services/auth'
+import { type UserRole, loadUsers, saveUsers } from '../../services/auth'
 import { loadFromStorage, saveToStorage } from '../../services/localStorage'
 import type { EventItem } from '../../types/event'
 import type { MusicItem } from '../../types/music'
 import { buildEmbedUrl, buildThumbnail } from '../../utils/youtube'
+import { fetchMe, logout as apiLogout } from '../../services/authApi'
+import { fetchEvents, createEvent, updateEvent, deleteEvent as apiDeleteEvent } from '../../services/eventsApi'
+import { fetchMusics, createMusic, updateMusic, deleteMusic as apiDeleteMusic } from '../../services/musicsApi'
+import { fetchMusicOrders, createMusicOrder, updateMusicOrder, deleteMusicOrder } from '../../services/musicOrdersApi'
+import { fetchFolders, createFolder, updateFolder, deleteFolder as apiDeleteFolder } from '../../services/foldersApi'
+import { fetchUsers, updateUser } from '../../services/usersApi'
+import type { ApiUser } from '../../types/api'
+import { getAccessToken } from '../../services/api'
 
 const DEFAULT_EVENTS: EventItem[] = [
   {
@@ -182,6 +190,7 @@ export default function Dashboard({ setScreen }: DashboardProps) {
   const [playerMusic, setPlayerMusic] = useState<MusicItem | null>(null)
   const [editingMusic, setEditingMusic] = useState<MusicItem | null>(null)
   const [editingEventId, setEditingEventId] = useState<number | null>(null)
+  const [selectedEventId, setSelectedEventId] = useState<number | null>(null)
   const [search, setSearch] = useState('')
   const [sortBy, setSortBy] = useState<'order' | 'title' | 'artist'>('order')
   const [filterType, setFilterType] = useState<'all' | 'fundo' | 'reacao'>('all')
@@ -190,28 +199,33 @@ export default function Dashboard({ setScreen }: DashboardProps) {
   const [displayName, setDisplayName] = useState('Usuário')
   const [userRole, setUserRole] = useState<UserRole>('cliente')
   const [accessibleEvents, setAccessibleEvents] = useState<string[]>([])
-  const [adminUsers, setAdminUsers] = useState<StoredUser[]>([])
+  const [adminUsers, setAdminUsers] = useState<ApiUser[]>([])
   const [adminSelectedEmail, setAdminSelectedEmail] = useState('')
   const [adminSelectedRole, setAdminSelectedRole] = useState<UserRole>('cliente')
   const [adminSelectedProjects, setAdminSelectedProjects] = useState<string[]>([])
   const [showEventChecklist, setShowEventChecklist] = useState(false)
   const [eventForm, setEventForm] = useState({ name: '', organizer: '', date: '' })
 
-  const refreshAdminUsers = () => {
-    setAdminUsers(loadUsers())
+  const refreshAdminUsers = async () => {
+    if (getAccessToken() && userRole === 'admin') {
+      try {
+        const users = await fetchUsers()
+        setAdminUsers(users)
+      } catch (err) {
+        console.error('Falha ao buscar usuários:', err)
+      }
+    }
   }
 
   useEffect(() => {
+    // Carrega dados do cache local imediatamente
     const storedEvents = loadFromStorage<EventItem[]>('sonora_events', [])
     const storedMusics = loadFromStorage<MusicItem[]>('sonora_music', [])
     const storedFolders = loadFromStorage<FolderNode[]>('sonora_folders', [])
     const storedSettings = loadFromStorage<{ displayName: string }>('sonora_settings', { displayName: '' })
-
     const storedUser = loadFromStorage<{ email: string; displayName?: string; role?: UserRole; projects?: string[] } | null>('loggedUser', null)
-
     const resolvedEmail = storedUser?.email || localStorage.getItem('userEmail') || 'user@sonora.com'
     const initialEvents = storedEvents.length ? storedEvents : DEFAULT_EVENTS
-
     setEvents(initialEvents)
     setMusics(storedMusics.length ? storedMusics : DEFAULT_MUSICS)
     setFolders(storedFolders.length ? storedFolders : DEFAULT_FOLDERS)
@@ -220,6 +234,116 @@ export default function Dashboard({ setScreen }: DashboardProps) {
     setUserRole(storedUser?.role || 'cliente')
     setAccessibleEvents(normalizeEventAccess(storedUser?.projects || [], initialEvents.map((event) => event.name)))
     refreshAdminUsers()
+
+    // Se houver token JWT, sincroniza com a API
+    if (!getAccessToken()) return
+
+    async function syncFromApi() {
+      try {
+        // 1. Dados do usuário autenticado
+        const me = await fetchMe()
+        const role: UserRole = me.is_admin ? 'admin' : me.is_manager ? 'gerente' : 'cliente'
+        setUserRole(role)
+        setUserEmail(me.email)
+        setDisplayName(me.username)
+        localStorage.setItem('loggedUser', JSON.stringify({
+          id: me.id, email: me.email, username: me.username,
+          is_admin: me.is_admin, is_manager: me.is_manager, role, projects: [],
+        }))
+
+        // 2. Eventos visíveis para este usuário
+        const apiEvents = await fetchEvents()
+        const mappedEvents: EventItem[] = apiEvents.map((e, i) => ({
+          id: i + 1,
+          apiId: e.id,
+          name: e.event_name,
+          organizer: e.manager ?? '',
+          date: e.end_date,
+          status: e.is_active ? 'ativo' : 'inativo',
+          musicCount: 0,
+        }))
+        setEvents(mappedEvents)
+        saveToStorage('sonora_events', mappedEvents)
+        setAccessibleEvents(mappedEvents.map(e => e.name))
+
+        // 3. Músicas: para gerentes/admins usa MusicOrders agrupados por evento
+        if (me.is_admin || me.is_manager) {
+          const orders = await fetchMusicOrders()
+          const mappedMusics: MusicItem[] = orders.map((order, i) => {
+            const m = order.music_details
+            const apiEvent = order.event_details
+            const localEvent = mappedEvents.find(e => e.apiId === apiEvent?.id)
+            return {
+              id: i + 1,
+              apiId: m?.id,
+              orderApiId: order.id,
+              order: order.order,
+              artist: m?.singer ?? '',
+              title: m?.name ?? '',
+              youtubeLink: m?.url ?? '',
+              notes: m?.observation ?? '',
+              type: order.category === 'background' ? 'fundo' : 'reacao',
+              thumbnail: buildThumbnail(m?.url ?? ''),
+              favorite: false,
+              folderId: null,
+              eventId: localEvent?.id ?? null,
+              createdAt: order.created_at,
+            }
+          })
+          setMusics(mappedMusics)
+          saveToStorage('sonora_music', mappedMusics)
+
+          // 4. Pastas
+          const apiFolders = await fetchFolders()
+          const flatFolders = apiFolders.map((f, i) => ({
+            id: i + 1,
+            apiId: f.id,
+            name: f.name,
+            parentId: null as number | null,
+            children: [] as FolderNode[],
+          }))
+          // Reconstrói hierarquia usando apiId de parent
+          const folderMap = new Map(flatFolders.map(f => [f.apiId, f]))
+          const roots: FolderNode[] = []
+          apiFolders.forEach((apif, i) => {
+            const node = flatFolders[i]
+            if (apif.parent) {
+              const parentNode = folderMap.get(apif.parent)
+              if (parentNode) {
+                node.parentId = parentNode.id
+                parentNode.children.push(node)
+              } else roots.push(node)
+            } else roots.push(node)
+          })
+          setFolders(roots)
+          saveToStorage('sonora_folders', roots)
+        } else {
+          // Clientes: músicas próprias submetidas
+          const ownMusics = await fetchMusics()
+          const mappedOwn: MusicItem[] = ownMusics.map((m, i) => ({
+            id: i + 1,
+            apiId: m.id,
+            order: i + 1,
+            artist: m.singer ?? '',
+            title: m.name,
+            youtubeLink: m.url ?? '',
+            notes: m.observation ?? '',
+            type: 'geral' as const,
+            thumbnail: buildThumbnail(m.url ?? ''),
+            favorite: false,
+            folderId: null,
+            eventId: null,
+            createdAt: m.created_at,
+          }))
+          setMusics(mappedOwn)
+          saveToStorage('sonora_music', mappedOwn)
+        }
+      } catch (err) {
+        console.warn('Falha ao sincronizar com a API, usando cache local.', err)
+      }
+    }
+
+    syncFromApi()
   }, [])
 
   useEffect(() => {
@@ -304,8 +428,9 @@ export default function Dashboard({ setScreen }: DashboardProps) {
         : music.project
 
       const matchesEvent = userRole === 'admin' || !musicEventName || visibleEventNames.includes(musicEventName)
+      const matchesSelectedEvent = selectedEventId === null || music.eventId === selectedEventId
 
-      return matchesSearch && matchesFilter && matchesTab && matchesEvent
+      return matchesSearch && matchesFilter && matchesTab && matchesEvent && matchesSelectedEvent
     })
 
     filtered = [...filtered].sort((left, right) => {
@@ -323,48 +448,62 @@ export default function Dashboard({ setScreen }: DashboardProps) {
     setShowEventModal(true)
   }
 
-  function handleSaveEvent(event: React.FormEvent) {
+  async function handleSaveEvent(event: React.FormEvent) {
     event.preventDefault()
 
     const duplicateEvent = events.some((item) =>
       item.id !== editingEventId &&
       normalizeText(item.name) === normalizeText(eventForm.name) &&
-      normalizeText(item.organizer) === normalizeText(eventForm.organizer) &&
       item.date === eventForm.date
     )
-
     if (duplicateEvent) {
       toast.error('Já existe um evento igual cadastrado.')
       return
     }
 
     if (editingEventId) {
+      const existing = events.find(e => e.id === editingEventId)
+      // Persiste localmente
       setEvents((current) =>
         current.map((item) =>
           item.id === editingEventId
-            ? {
-                ...item,
-                name: eventForm.name,
-                organizer: eventForm.organizer,
-                date: eventForm.date,
-                musicCount: musics.filter((music) => music.eventId === item.id).length,
-              }
+            ? { ...item, name: eventForm.name, organizer: eventForm.organizer, date: eventForm.date,
+                musicCount: musics.filter((m) => m.eventId === item.id).length }
             : item
         )
       )
       toast.success('Evento atualizado.')
+      // Sincroniza com API
+      if (existing?.apiId) {
+        updateEvent(existing.apiId, {
+          event_name: eventForm.name,
+          end_date: eventForm.date,
+        }).catch(() => toast.error('Falha ao sincronizar evento com o servidor.'))
+      }
     } else {
+      const localId = Date.now()
       const newEvent: EventItem = {
-        id: Date.now(),
+        id: localId,
         name: eventForm.name,
         organizer: eventForm.organizer,
         date: eventForm.date,
         status: 'ativo',
         musicCount: 0,
       }
-
       setEvents((current) => [...current, newEvent])
       toast.success('Evento salvo com sucesso.')
+      // Sincroniza com API
+      if (getAccessToken()) {
+        createEvent({
+          event_name: eventForm.name,
+          start_date: new Date().toISOString().split('T')[0],
+          end_date: eventForm.date,
+        }).then((apiEvent) => {
+          setEvents((current) =>
+            current.map((e) => e.id === localId ? { ...e, apiId: apiEvent.id } : e)
+          )
+        }).catch(() => toast.error('Falha ao criar evento no servidor.'))
+      }
     }
 
     setShowEventModal(false)
@@ -383,16 +522,22 @@ export default function Dashboard({ setScreen }: DashboardProps) {
   }
 
   function deleteEvent(id: number) {
+    const existing = events.find((e) => e.id === id)
     setEvents((current) => current.filter((event) => event.id !== id))
     setMusics((current) => current.map((music) => (music.eventId === id ? { ...music, eventId: null } : music)))
     toast.success('Evento removido.')
+    if (existing?.apiId) {
+      apiDeleteEvent(existing.apiId).catch(() =>
+        toast.error('Falha ao remover evento no servidor.')
+      )
+    }
   }
 
   function openEvent(event: EventItem) {
     setActiveTab('musicas')
     setSearch('')
     setFilterType('all')
-    setMusics((current) => current.map((music) => (music.eventId === event.id ? music : music)))
+    setSelectedEventId(event.id)
     toast.success(`Abrindo músicas de ${event.name}`)
   }
 
@@ -401,41 +546,90 @@ export default function Dashboard({ setScreen }: DashboardProps) {
     setShowMusicModal(true)
   }
 
-  function handleMusicSave(payload: Omit<MusicItem, 'thumbnail' | 'createdAt'> & { id?: number }) {
+  async function handleMusicSave(payload: Omit<MusicItem, 'thumbnail' | 'createdAt'> & { id?: number }) {
     const duplicateMusic = musics.some((music) =>
       music.id !== payload.id &&
       (music.youtubeLink === payload.youtubeLink ||
         (music.title.toLowerCase() === payload.title.toLowerCase() && music.artist.toLowerCase() === payload.artist.toLowerCase()))
     )
-
     if (duplicateMusic) {
       toast.error('Essa música já existe no repertório.')
       return
     }
 
     if (payload.id) {
+      // Edição
+      const existing = musics.find((m) => m.id === payload.id)
       setMusics((current) =>
         current.map((music) =>
           music.id === payload.id
-            ? {
-                ...music,
-                ...payload,
-                thumbnail: buildThumbnail(payload.youtubeLink),
-              }
+            ? { ...music, ...payload, thumbnail: buildThumbnail(payload.youtubeLink) }
             : music
         )
       )
       toast.success('Música atualizada.')
+      // Sincroniza com API
+      if (existing?.apiId) {
+        updateMusic(existing.apiId, {
+          name: payload.title,
+          url: payload.youtubeLink,
+          singer: payload.artist,
+          observation: payload.notes,
+        }).catch(() => toast.error('Falha ao atualizar música no servidor.'))
+      }
+      // Atualiza MusicOrder (categoria/ordem)
+      if (existing?.orderApiId && payload.eventId !== undefined) {
+        const localEvent = events.find((e) => e.id === payload.eventId)
+        if (localEvent?.apiId) {
+          updateMusicOrder(existing.orderApiId, {
+            order: payload.order,
+            category: payload.type === 'fundo' ? 'background' : 'interactive',
+          }).catch(() => {})
+        }
+      }
     } else {
+      // Criação
+      const localId = Date.now()
       const newMusic: MusicItem = {
         ...payload,
-        id: Date.now(),
+        id: localId,
         thumbnail: buildThumbnail(payload.youtubeLink),
         createdAt: new Date().toISOString(),
       }
-
       setMusics((current) => [...current, newMusic])
       toast.success('Música adicionada ao repertório.')
+      // Sincroniza com API
+      if (getAccessToken()) {
+        try {
+          const apiMusic = await createMusic({
+            name: payload.title,
+            url: payload.youtubeLink,
+            singer: payload.artist,
+            observation: payload.notes,
+          })
+          // Cria MusicOrder se houver evento selecionado
+          const localEvent = events.find((e) => e.id === payload.eventId)
+          if (localEvent?.apiId) {
+            const apiOrder = await createMusicOrder({
+              music: apiMusic.id,
+              event: localEvent.apiId,
+              order: payload.order,
+              category: payload.type === 'fundo' ? 'background' : 'interactive',
+            })
+            setMusics((current) =>
+              current.map((m) =>
+                m.id === localId ? { ...m, apiId: apiMusic.id, orderApiId: apiOrder.id } : m
+              )
+            )
+          } else {
+            setMusics((current) =>
+              current.map((m) => m.id === localId ? { ...m, apiId: apiMusic.id } : m)
+            )
+          }
+        } catch {
+          toast.error('Falha ao salvar música no servidor.')
+        }
+      }
     }
 
     setShowMusicModal(false)
@@ -448,8 +642,14 @@ export default function Dashboard({ setScreen }: DashboardProps) {
   }
 
   function handleDeleteMusic(id: number) {
+    const existing = musics.find((m) => m.id === id)
     setMusics((current) => current.filter((music) => music.id !== id))
     toast.success('Música removida.')
+    if (existing?.orderApiId) {
+      deleteMusicOrder(existing.orderApiId).catch(() => {})
+    } else if (existing?.apiId) {
+      apiDeleteMusic(existing.apiId).catch(() => {})
+    }
   }
 
   function handleToggleFavorite(id: number) {
@@ -468,8 +668,13 @@ export default function Dashboard({ setScreen }: DashboardProps) {
     )
   }
 
-  function reorderMusics(targetId: number) {
+  async function reorderMusics(targetId: number) {
     if (draggedMusicId === null || targetId === draggedMusicId) return
+
+    const draggedMusic = musics.find((m) => m.id === draggedMusicId)
+    if (!draggedMusic) return
+
+    let resolvedOrder = -1
 
     setMusics((current) => {
       const updated = [...current]
@@ -478,36 +683,101 @@ export default function Dashboard({ setScreen }: DashboardProps) {
 
       if (fromIndex < 0 || toIndex < 0) return current
 
-      const [draggedMusic] = updated.splice(fromIndex, 1)
-      updated.splice(toIndex, 0, draggedMusic)
+      const [item] = updated.splice(fromIndex, 1)
+      updated.splice(toIndex, 0, item)
+
+      resolvedOrder = toIndex + 1
 
       return updated.map((music, index) => ({ ...music, order: index + 1 }))
     })
 
+    if (resolvedOrder > 0 && draggedMusic.orderApiId && getAccessToken()) {
+      try {
+        await updateMusicOrder(draggedMusic.orderApiId, { order: resolvedOrder })
+        toast.success('Ordem sincronizada no servidor.')
+      } catch {
+        toast.error('Falha ao sincronizar ordem no servidor.')
+      }
+    }
+
     setDraggedMusicId(null)
   }
 
-  function handleMoveMusic(musicId: number, folderId: number | null) {
+  async function handleMoveMusic(musicId: number, folderId: number | null) {
     if (musicId <= 0) return
 
+    const music = musics.find((m) => m.id === musicId)
+    if (!music) return
+
     setMusics((current) =>
-      current.map((music) => (music.id === musicId ? { ...music, folderId } : music))
+      current.map((m) => (m.id === musicId ? { ...m, folderId } : m))
     )
+
+    if (getAccessToken() && music.orderApiId) {
+      let folderApiId: string | null = null
+      if (folderId !== null) {
+        const findFolderApiId = (nodes: FolderNode[]): string | null => {
+          for (const node of nodes) {
+            if (node.id === folderId) return node.apiId || null
+            const found = findFolderApiId(node.children)
+            if (found) return found
+          }
+          return null
+        }
+        folderApiId = findFolderApiId(folders)
+      }
+
+      try {
+        await updateMusicOrder(music.orderApiId, { folder: folderApiId })
+        toast.success('Música movida com sucesso.')
+      } catch {
+        toast.error('Falha ao sincronizar movimento no servidor.')
+      }
+    }
   }
 
   function handleCreateFolder(parentId: number | null) {
     const name = window.prompt('Nome da pasta')
     if (!name?.trim()) return
 
+    const localId = Date.now()
     const newFolder: FolderNode = {
-      id: Date.now(),
+      id: localId,
       name: name.trim(),
       parentId,
       children: [],
     }
-
     setFolders((current) => applyFolderTree(current, parentId, newFolder))
     toast.success('Pasta criada.')
+
+    // Sincroniza com API — precisa de um evento associado
+    if (getAccessToken()) {
+      // Tenta encontrar o evento via pasta pai
+      const parentFolder = parentId
+        ? (function findFolder(nodes: FolderNode[]): FolderNode | undefined {
+            for (const n of nodes) {
+              if (n.id === parentId) return n
+              const found = findFolder(n.children)
+              if (found) return found
+            }
+          })(folders)
+        : undefined
+
+      // Usa o primeiro evento disponível se não houver contexto
+      const eventApiId = events.find(e => e.apiId)?.apiId
+      const parentApiId = parentFolder?.apiId
+      if (eventApiId) {
+        createFolder({
+          name: name.trim(),
+          event: eventApiId,
+          parent: parentApiId ?? null,
+        }).then((apif) => {
+          setFolders((current) =>
+            updateFolderTree(current, localId, (node) => ({ ...node, apiId: apif.id }))
+          )
+        }).catch(() => {})
+      }
+    }
   }
 
   function handleEditFolder(folder: FolderNode) {
@@ -515,20 +785,30 @@ export default function Dashboard({ setScreen }: DashboardProps) {
     if (!name?.trim()) return
 
     setFolders((current) =>
-      updateFolderTree(current, folder.id, (node) => ({
-        ...node,
-        name: name.trim(),
-      }))
+      updateFolderTree(current, folder.id, (node) => ({ ...node, name: name.trim() }))
     )
+    if (folder.apiId) {
+      updateFolder(folder.apiId, { name: name.trim() }).catch(() => {})
+    }
   }
 
   function handleDeleteFolder(folderId: number) {
+    const node = (function find(nodes: FolderNode[]): FolderNode | undefined {
+      for (const n of nodes) {
+        if (n.id === folderId) return n
+        const found = find(n.children)
+        if (found) return found
+      }
+    })(folders)
     setFolders((current) => removeFolderTree(current, folderId))
     setMusics((current) => current.map((music) => (music.folderId === folderId ? { ...music, folderId: null } : music)))
     toast.success('Pasta removida.')
+    if (node?.apiId) {
+      apiDeleteFolder(node.apiId).catch(() => {})
+    }
   }
 
-  function handleAdminAccessSave(event: React.FormEvent) {
+  async function handleAdminAccessSave(event: React.FormEvent) {
     event.preventDefault()
 
     if (!adminSelectedEmail) {
@@ -536,39 +816,59 @@ export default function Dashboard({ setScreen }: DashboardProps) {
       return
     }
 
+    const selectedUser = adminUsers.find((u) => u.email === adminSelectedEmail)
+    if (!selectedUser) return
+
     const lockedAdminUser = adminSelectedEmail === 'admin@admin'
     const normalizedPermissions = normalizeEventAccess(adminSelectedProjects, events.map((event) => event.name))
 
+    // Sincroniza com o backend
+    if (getAccessToken()) {
+      const eventIds = events
+        .filter((e) => adminSelectedProjects.includes(e.name))
+        .map((e) => e.apiId)
+        .filter((id): id is string => !!id)
+
+      try {
+        await updateUser(selectedUser.id, {
+          is_manager: lockedAdminUser ? false : adminSelectedRole === 'gerente',
+          is_admin: lockedAdminUser ? true : adminSelectedRole === 'admin',
+          event_ids: eventIds,
+        })
+        toast.success('Permissões atualizadas no servidor.')
+        refreshAdminUsers()
+      } catch (err) {
+        toast.error('Falha ao sincronizar permissões com o servidor.')
+      }
+    }
+
+    // Fallback/Legacy para compatibilidade local
     const updatedUsers = adminUsers.map((user) =>
       user.email === adminSelectedEmail
         ? {
             ...user,
-            role: lockedAdminUser ? 'admin' : adminSelectedRole,
-            projects: lockedAdminUser ? events.map((event) => event.name) : normalizedPermissions,
+            is_manager: lockedAdminUser ? false : adminSelectedRole === 'gerente',
+            is_admin: lockedAdminUser ? true : adminSelectedRole === 'admin',
           }
         : user
     )
 
-    saveUsers(updatedUsers)
-    setAdminUsers(updatedUsers)
+    const updatedUser = updatedUsers.find((user) => user.email === adminSelectedEmail)
 
-    const selectedUser = updatedUsers.find((user) => user.email === adminSelectedEmail)
-
-    if (selectedUser && selectedUser.email === userEmail) {
-      setUserRole(selectedUser.role)
-      setAccessibleEvents(selectedUser.projects)
+    if (updatedUser && updatedUser.email === userEmail) {
+      const role: UserRole = updatedUser.is_admin ? 'admin' : updatedUser.is_manager ? 'gerente' : 'cliente'
+      setUserRole(role)
+      setAccessibleEvents(adminSelectedProjects)
 
       const updatedLoggedUser = {
-        email: selectedUser.email,
-        displayName: selectedUser.displayName || selectedUser.email.split('@')[0],
-        role: selectedUser.role,
-        projects: selectedUser.projects,
+        email: updatedUser.email,
+        displayName: updatedUser.username,
+        role: role,
+        projects: adminSelectedProjects,
       }
 
       localStorage.setItem('loggedUser', JSON.stringify(updatedLoggedUser))
     }
-
-    toast.success('Permissões atualizadas com sucesso.')
   }
 
   function handleAdminUserChange(value: string) {
@@ -589,9 +889,17 @@ export default function Dashboard({ setScreen }: DashboardProps) {
       return
     }
 
-    setAdminSelectedRole(user?.role ?? 'cliente')
-    setAdminSelectedProjects(normalizeEventAccess(Array.isArray(user?.projects) ? user.projects : [], events.map((event) => event.name)))
+    const role: UserRole = user?.is_admin ? 'admin' : user?.is_manager ? 'gerente' : 'cliente'
+    setAdminSelectedRole(role)
+    const projects = user?.my_events?.map(e => e.event_name) || []
+    setAdminSelectedProjects(normalizeEventAccess(projects, events.map((event) => event.name)))
   }
+
+  useEffect(() => {
+    if (activeTab === 'configuracoes' && userRole === 'admin') {
+      refreshAdminUsers()
+    }
+  }, [activeTab, userRole])
 
   const musicSummary = {
     total: visibleMusics.length,
@@ -612,8 +920,7 @@ export default function Dashboard({ setScreen }: DashboardProps) {
           subtitle={currentTabInfo.subtitle}
           email={userEmail}
           onLogout={() => {
-            localStorage.removeItem('loggedUser')
-            localStorage.removeItem('userEmail')
+            apiLogout()
             setScreen('login')
           }}
         />
@@ -683,6 +990,17 @@ export default function Dashboard({ setScreen }: DashboardProps) {
                 </div>
 
                 <div className="toolbar-stack">
+                  <select
+                    className="toolbar-select"
+                    value={selectedEventId ?? ''}
+                    onChange={(event) => setSelectedEventId(event.target.value ? Number(event.target.value) : null)}
+                  >
+                    <option value="">Todos os eventos</option>
+                    {visibleEvents.map((event) => (
+                      <option key={event.id} value={event.id}>{event.name}</option>
+                    ))}
+                  </select>
+
                   <input
                     type="search"
                     className="toolbar-input"
@@ -938,8 +1256,7 @@ export default function Dashboard({ setScreen }: DashboardProps) {
                     type="button"
                     className="btn-danger"
                     onClick={() => {
-                      localStorage.removeItem('loggedUser')
-                      localStorage.removeItem('userEmail')
+                      apiLogout()
                       setScreen('login')
                     }}
                   >

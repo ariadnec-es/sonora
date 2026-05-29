@@ -2,7 +2,7 @@ import { FaUser, FaLock } from 'react-icons/fa'
 import { useState } from 'react'
 import toast from 'react-hot-toast'
 import type { Screen } from '../../types/screen'
-import { loadUsers, saveUsers } from '../../services/auth'
+import { register } from '../../services/authApi'
 import './Register.css'
 
 type Props = {
@@ -10,11 +10,13 @@ type Props = {
 }
 
 export default function Register({ setScreen }: Props) {
+  const [username, setUsername] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [loading, setLoading] = useState(false)
 
-  function handleSubmit(event: React.FormEvent) {
+  async function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
 
     if (password !== confirmPassword) {
@@ -22,30 +24,22 @@ export default function Register({ setScreen }: Props) {
       return
     }
 
-    const users = loadUsers()
-
-    const userExists = users.find((user) => user.email === email)
-
-    if (userExists) {
-      toast.error('Email já cadastrado')
-      return
+    setLoading(true)
+    try {
+      await register({ username, email, password })
+      toast.success('Cadastro realizado! Faça login para continuar.')
+      setScreen('login')
+    } catch (err: unknown) {
+      const error = err as { status?: number; body?: Record<string, string[]> }
+      if (error?.body) {
+        const messages = Object.values(error.body).flat().join(' ')
+        toast.error(messages || 'Erro ao cadastrar.')
+      } else {
+        toast.error('Erro ao conectar com o servidor.')
+      }
+    } finally {
+      setLoading(false)
     }
-
-    const newUser = {
-      email,
-      password,
-      role: 'cliente' as const,
-      displayName: email.split('@')[0],
-      projects: [],
-    }
-
-    const updatedUsers = [...users, newUser]
-
-    saveUsers(updatedUsers)
-
-    toast.success('Cadastro realizado!')
-
-    setScreen('login')
   }
 
   return (
@@ -55,9 +49,22 @@ export default function Register({ setScreen }: Props) {
 
         <div className="input-field">
           <input
+            type="text"
+            placeholder="Nome de usuário"
+            required
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+          />
+
+          <FaUser className="icon" />
+        </div>
+
+        <div className="input-field">
+          <input
             type="email"
             placeholder="E-mail"
             required
+            value={email}
             onChange={(e) => setEmail(e.target.value)}
           />
 
@@ -69,6 +76,7 @@ export default function Register({ setScreen }: Props) {
             type="password"
             placeholder="Senha"
             required
+            value={password}
             onChange={(e) => setPassword(e.target.value)}
           />
 
@@ -80,14 +88,15 @@ export default function Register({ setScreen }: Props) {
             type="password"
             placeholder="Confirmar senha"
             required
+            value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
           />
 
           <FaLock className="icon" />
         </div>
 
-        <button type="submit">
-          Cadastrar
+        <button type="submit" disabled={loading}>
+          {loading ? 'Cadastrando...' : 'Cadastrar'}
         </button>
 
         <div className="signup-link">

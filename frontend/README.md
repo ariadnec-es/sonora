@@ -38,7 +38,7 @@ O projeto já vem com um usuário administrativo local:
 ```bash
 npm run build
 npm run preview
-```
+```'
 
 ### 9. Possíveis erros comuns
 - Se aparecer erro de dependências, rode `npm install` novamente.

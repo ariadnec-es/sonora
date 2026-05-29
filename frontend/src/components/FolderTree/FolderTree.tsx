@@ -2,6 +2,7 @@ import type { MusicItem } from '../../types/music'
 
 export interface FolderNode {
   id: number
+  apiId?: string        // UUID do backend
   name: string
   parentId: number | null
   children: FolderNode[]

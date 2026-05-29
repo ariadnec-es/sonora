@@ -78,5 +78,30 @@ class UserViewSet(BaseViewSet):
 
         return Response(UserSerializer(user).data)
 
+    def update(self, request, *args, **kwargs):
+        instance = self.get_object()
+        if not self.is_admin() and instance != request.user:
+            self.deny()
+
+        data = (
+            request.data.copy() if hasattr(request.data, "copy") else dict(request.data)
+        )
+        event_ids = data.pop("event_ids", None)
+
+        serializer = self.get_serializer(instance, data=data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.save()
+
+        if event_ids is not None and self.is_admin():
+            from ..models import Event
+
+            # Desvincula o gerente de todos os eventos atuais
+            Event.objects.filter(manager=user).update(manager=None)
+            # Vincula aos novos eventos
+            if event_ids:
+                Event.objects.filter(id__in=event_ids).update(manager=user)
+
+        return Response(UserSerializer(user).data)
+
     def can_delete(self, instance):
         return self.is_admin()

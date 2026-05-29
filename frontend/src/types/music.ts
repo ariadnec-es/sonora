@@ -2,6 +2,8 @@ export type MusicType = 'fundo' | 'reacao' | 'geral'
 
 export interface MusicItem {
   id: number
+  apiId?: string          // UUID do YoutubeMusic no backend
+  orderApiId?: string     // UUID do MusicOrder no backend
   order: number
   artist: string
   title: string

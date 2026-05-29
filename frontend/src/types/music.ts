@@ -10,6 +10,7 @@ export interface MusicItem {
   youtubeLink: string
   notes: string
   type: MusicType
+  status: 'pending' | 'accepted' | 'rejected'
   thumbnail: string
   favorite: boolean
   folderId: number | null

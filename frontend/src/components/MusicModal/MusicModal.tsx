@@ -132,10 +132,11 @@ export default function MusicModal({ open, onClose, events, editingMusic, onSave
           <label className="field-block">
             <span>Evento</span>
             <select
+              required
               value={form.eventId ?? ''}
               onChange={(event) => setForm((current) => ({ ...current, eventId: event.target.value ? Number(event.target.value) : null }))}
             >
-              <option value="">Sem vínculo</option>
+              <option value="" disabled>Selecione um evento</option>
               {events.map((event) => (
                 <option key={event.id} value={event.id}>{event.name}</option>
               ))}

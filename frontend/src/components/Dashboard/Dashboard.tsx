@@ -63,6 +63,7 @@ const DEFAULT_MUSICS: MusicItem[] = [
     youtubeLink: 'https://www.youtube.com/watch?v=YQHsXMglC9A',
     notes: 'Entrada principal',
     type: 'fundo',
+    status: 'accepted',
     thumbnail: buildThumbnail('https://www.youtube.com/watch?v=YQHsXMglC9A'),
     favorite: true,
     folderId: 1,
@@ -78,6 +79,7 @@ const DEFAULT_MUSICS: MusicItem[] = [
     youtubeLink: 'https://www.youtube.com/watch?v=4NRXx6U8ABQ',
     notes: 'Reação do público',
     type: 'reacao',
+    status: 'accepted',
     thumbnail: buildThumbnail('https://www.youtube.com/watch?v=4NRXx6U8ABQ'),
     favorite: false,
     folderId: 2,
@@ -256,6 +258,7 @@ export default function Dashboard({ setScreen }: DashboardProps) {
         }))
 
         // 2. Eventos visíveis para este usuário
+        // Admins vêem tudo, Gerentes vêem os deles, Clientes vêem eventos ativos públicos
         const apiEvents = await fetchEvents()
         const mappedEvents: EventItem[] = apiEvents.map((e, i) => ({
           id: i + 1,
@@ -270,36 +273,63 @@ export default function Dashboard({ setScreen }: DashboardProps) {
         }))
         setEvents(mappedEvents)
         saveToStorage('sonora_events', mappedEvents)
+        // Para clientes, todos os eventos retornados pela API são "acessíveis" para envio de música
         setAccessibleEvents(mappedEvents.map(e => e.name))
 
-        // 3. Músicas: para gerentes/admins usa MusicOrders agrupados por evento
-        if (me.is_admin || me.is_manager) {
-          const orders = await fetchMusicOrders()
-          const mappedMusics: MusicItem[] = orders.map((order, i) => {
-            const m = order.music_details
-            const apiEvent = order.event_details
-            const localEvent = mappedEvents.find(e => e.apiId === apiEvent?.id)
-            return {
-              id: i + 1,
-              apiId: m?.id,
-              orderApiId: order.id,
-              order: order.order,
-              artist: m?.singer ?? '',
-              title: m?.name ?? '',
-              youtubeLink: m?.url ?? '',
-              notes: m?.observation ?? '',
-              type: order.category === 'background' ? 'fundo' : 'reacao',
-              thumbnail: buildThumbnail(m?.url ?? ''),
-              favorite: false,
-              folderId: null,
-              eventId: localEvent?.id ?? null,
-              createdAt: order.created_at,
-            }
-          })
-          setMusics(mappedMusics)
-          saveToStorage('sonora_music', mappedMusics)
+        // 3. Músicas e Pedidos (MusicOrders)
+        // Todos os usuários autenticados podem ver seus próprios MusicOrders
+        const orders = await fetchMusicOrders()
+        const mappedMusics: MusicItem[] = orders.map((order, i) => {
+          const m = order.music_details
+          const apiEvent = order.event_details
+          const localEvent = mappedEvents.find(e => e.apiId === apiEvent?.id)
+          return {
+            id: i + 1,
+            apiId: m?.id,
+            orderApiId: order.id,
+            order: order.order,
+            artist: m?.singer ?? '',
+            title: m?.name ?? '',
+            youtubeLink: m?.url ?? '',
+            notes: m?.observation ?? '',
+            type: order.category === 'background' ? 'fundo' : 'reacao',
+            status: order.status || 'pending',
+            thumbnail: buildThumbnail(m?.url ?? ''),
+            favorite: false,
+            folderId: null,
+            eventId: localEvent?.id ?? null,
+            createdAt: order.created_at,
+          }
+        })
 
-          // 4. Pastas
+        // Adiciona músicas que não estão em ordens (músicas "soltas" do usuário)
+        const ownMusics = await fetchMusics()
+        const existingMusicApiIds = new Set(mappedMusics.map(m => m.apiId))
+        const mappedOwn: MusicItem[] = ownMusics
+          .filter(m => !existingMusicApiIds.has(m.id))
+          .map((m, i) => ({
+            id: mappedMusics.length + i + 1,
+            apiId: m.id,
+            order: mappedMusics.length + i + 1,
+            artist: m.singer ?? '',
+            title: m.name,
+            youtubeLink: m.url ?? '',
+            notes: m.observation ?? '',
+            type: 'geral' as const,
+            status: 'pending' as const,
+            thumbnail: buildThumbnail(m.url ?? ''),
+            favorite: false,
+            folderId: null,
+            eventId: null,
+            createdAt: m.created_at,
+          }))
+
+        const allMusics = [...mappedMusics, ...mappedOwn]
+        setMusics(allMusics)
+        saveToStorage('sonora_music', allMusics)
+
+        // 4. Pastas (Apenas para gerentes e admins, pois dependem de eventos que gerenciam)
+        if (me.is_admin || me.is_manager) {
           const apiFolders = await fetchFolders()
           const flatFolders = apiFolders.map((f, i) => ({
             id: i + 1,
@@ -308,7 +338,6 @@ export default function Dashboard({ setScreen }: DashboardProps) {
             parentId: null as number | null,
             children: [] as FolderNode[],
           }))
-          // Reconstrói hierarquia usando apiId de parent
           const folderMap = new Map(flatFolders.map(f => [f.apiId, f]))
           const roots: FolderNode[] = []
           apiFolders.forEach((apif, i) => {
@@ -323,26 +352,6 @@ export default function Dashboard({ setScreen }: DashboardProps) {
           })
           setFolders(roots)
           saveToStorage('sonora_folders', roots)
-        } else {
-          // Clientes: músicas próprias submetidas
-          const ownMusics = await fetchMusics()
-          const mappedOwn: MusicItem[] = ownMusics.map((m, i) => ({
-            id: i + 1,
-            apiId: m.id,
-            order: i + 1,
-            artist: m.singer ?? '',
-            title: m.name,
-            youtubeLink: m.url ?? '',
-            notes: m.observation ?? '',
-            type: 'geral' as const,
-            thumbnail: buildThumbnail(m.url ?? ''),
-            favorite: false,
-            folderId: null,
-            eventId: null,
-            createdAt: m.created_at,
-          }))
-          setMusics(mappedOwn)
-          saveToStorage('sonora_music', mappedOwn)
         }
       } catch (err) {
         console.warn('Falha ao sincronizar com a API, usando cache local.', err)
@@ -397,7 +406,7 @@ export default function Dashboard({ setScreen }: DashboardProps) {
   }, [accessibleEvents, events, userRole])
 
   const visibleEventNames = useMemo(() => {
-    if (userRole === 'admin') {
+    if (userRole === 'admin' || userRole === 'cliente') {
       return events.map((event) => event.name)
     }
 
@@ -433,20 +442,42 @@ export default function Dashboard({ setScreen }: DashboardProps) {
         ? events.find((event) => event.id === music.eventId)?.name || music.project
         : music.project
 
-      const matchesEvent = userRole === 'admin' || !musicEventName || visibleEventNames.includes(musicEventName)
+      const matchesEvent = userRole === 'admin' || userRole === 'cliente' || !musicEventName || visibleEventNames.includes(musicEventName)
       const matchesSelectedEvent = selectedEventId === null || music.eventId === selectedEventId
 
       return matchesSearch && matchesFilter && matchesTab && matchesEvent && matchesSelectedEvent
     })
 
     filtered = [...filtered].sort((left, right) => {
+      if (userRole === 'admin' || userRole === 'gerente') {
+        const eventL = events.find(e => e.id === left.eventId)?.name || ''
+        const eventR = events.find(e => e.id === right.eventId)?.name || ''
+        if (eventL !== eventR) return eventL.localeCompare(eventR)
+      }
+
       if (sortBy === 'title') return left.title.localeCompare(right.title)
       if (sortBy === 'artist') return left.artist.localeCompare(right.artist)
       return left.order - right.order
     })
 
     return filtered
-  }, [activeTab, events, filterType, musics, search, sortBy, userRole, visibleEventNames])
+    }, [activeTab, events, filterType, musics, search, sortBy, userRole, visibleEventNames, selectedEventId])
+
+    async function handleStatusChange(id: number, status: 'pending' | 'accepted' | 'rejected') {
+    if (!canManageMusic) return
+    const music = musics.find(m => m.id === id)
+    if (!music || !music.orderApiId) return
+
+    setMusics(current => current.map(m => m.id === id ? { ...m, status } : m))
+
+    try {
+      await updateMusicOrder(music.orderApiId, { status })
+      toast.success(`Status da música atualizado para ${status === 'accepted' ? 'Aceita' : 'Rejeitada'}.`)
+    } catch {
+      toast.error('Falha ao sincronizar status no servidor.')
+    }
+    }
+
 
   async function openNewEvent() {
     setEditingEventId(null)
@@ -692,6 +723,7 @@ export default function Dashboard({ setScreen }: DashboardProps) {
   }
 
   function handleMoveType(id: number, type: 'fundo' | 'reacao' | 'geral') {
+    if (!canManageMusic) return
     setMusics((current) =>
       current.map((music) =>
         music.id === id ? { ...music, type } : music
@@ -700,6 +732,7 @@ export default function Dashboard({ setScreen }: DashboardProps) {
   }
 
   async function reorderMusics(targetId: number) {
+    if (!canManageMusic) return
     if (draggedMusicId === null || targetId === draggedMusicId) return
 
     const draggedMusic = musics.find((m) => m.id === draggedMusicId)
@@ -735,6 +768,7 @@ export default function Dashboard({ setScreen }: DashboardProps) {
   }
 
   async function handleMoveMusic(musicId: number, folderId: number | null) {
+    if (!canManageMusic) return
     if (musicId <= 0) return
 
     const music = musics.find((m) => m.id === musicId)
@@ -1052,27 +1086,77 @@ export default function Dashboard({ setScreen }: DashboardProps) {
                     <option value="artist">Ordenar por artista</option>
                   </select>
 
-                  {canManageMusic && (
+                  {getAccessToken() && (
                     <button type="button" className="btn-primary" onClick={handleOpenMusicModal}>Adicionar Música</button>
                   )}
                 </div>
               </div>
 
               <div className="music-list-stack">
-                {visibleMusics.map((music) => (
-                  <MusicCard
-                    key={music.id}
-                    music={music}
-                    canManage={canManageMusic}
-                    onEdit={handleEditMusic}
-                    onDelete={handleDeleteMusic}
-                    onToggleFavorite={handleToggleFavorite}
-                    onPlay={(item) => setPlayerMusic(item)}
-                    onMoveType={handleMoveType}
-                    onDragStart={setDraggedMusicId}
-                    onDrop={reorderMusics}
-                  />
-                ))}
+                {visibleEvents.map(event => {
+                  const eventMusics = visibleMusics.filter(m => m.eventId === event.id)
+                  if (eventMusics.length === 0) return null
+                  
+                  return (
+                    <div key={event.id} className="event-music-group" style={{ marginBottom: '24px' }}>
+                      <h4 style={{ 
+                        padding: '8px 16px', 
+                        backgroundColor: 'rgba(255,255,255,0.05)', 
+                        borderRadius: '8px',
+                        marginBottom: '12px',
+                        color: 'var(--accent)',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center'
+                      }}>
+                        Evento: {event.name}
+                        <span style={{ fontSize: '0.7rem', color: '#8fa0bc' }}>{eventMusics.length} músicas</span>
+                      </h4>
+                      <div className="music-list-stack">
+                        {eventMusics.map((music) => (
+                          <MusicCard
+                            key={music.id}
+                            music={music}
+                            eventName={event.name}
+                            canManage={canManageMusic}
+                            onEdit={handleEditMusic}
+                            onDelete={handleDeleteMusic}
+                            onToggleFavorite={handleToggleFavorite}
+                            onPlay={(item) => setPlayerMusic(item)}
+                            onMoveType={handleMoveType}
+                            onStatusChange={handleStatusChange}
+                            onDragStart={setDraggedMusicId}
+                            onDrop={reorderMusics}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })}
+
+                {/* Loose musics (though now mandatory, legacy or unlinked items) */}
+                {visibleMusics.filter(m => !m.eventId).length > 0 && (
+                  <div className="event-music-group">
+                    <h4 style={{ padding: '8px 16px', backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: '8px', marginBottom: '12px' }}>Sem Evento</h4>
+                    <div className="music-list-stack">
+                      {visibleMusics.filter(m => !m.eventId).map((music) => (
+                        <MusicCard
+                          key={music.id}
+                          music={music}
+                          canManage={canManageMusic}
+                          onEdit={handleEditMusic}
+                          onDelete={handleDeleteMusic}
+                          onToggleFavorite={handleToggleFavorite}
+                          onPlay={(item) => setPlayerMusic(item)}
+                          onMoveType={handleMoveType}
+                          onStatusChange={handleStatusChange}
+                          onDragStart={setDraggedMusicId}
+                          onDrop={reorderMusics}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {visibleMusics.length === 0 && <p className="empty-state">Nenhuma música encontrada.</p>}
               </div>
@@ -1089,20 +1173,36 @@ export default function Dashboard({ setScreen }: DashboardProps) {
               </div>
 
               <div className="music-list-stack">
-                {visibleMusics.map((music) => (
-                  <MusicCard
-                    key={music.id}
-                    music={music}
-                    canManage={canManageMusic}
-                    onEdit={handleEditMusic}
-                    onDelete={handleDeleteMusic}
-                    onToggleFavorite={handleToggleFavorite}
-                    onPlay={(item) => setPlayerMusic(item)}
-                    onMoveType={handleMoveType}
-                    onDragStart={setDraggedMusicId}
-                    onDrop={reorderMusics}
-                  />
-                ))}
+                {visibleEvents.map(event => {
+                  const eventMusics = visibleMusics.filter(m => m.eventId === event.id)
+                  if (eventMusics.length === 0) return null
+                  
+                  return (
+                    <div key={event.id} className="event-music-group" style={{ marginBottom: '24px' }}>
+                      <h4 style={{ padding: '8px 16px', backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: '8px', marginBottom: '12px', color: 'var(--accent)' }}>
+                        Evento: {event.name}
+                      </h4>
+                      <div className="music-list-stack">
+                        {eventMusics.map((music) => (
+                          <MusicCard
+                            key={music.id}
+                            music={music}
+                            eventName={event.name}
+                            canManage={canManageMusic}
+                            onEdit={handleEditMusic}
+                            onDelete={handleDeleteMusic}
+                            onToggleFavorite={handleToggleFavorite}
+                            onPlay={(item) => setPlayerMusic(item)}
+                            onMoveType={handleMoveType}
+                            onStatusChange={handleStatusChange}
+                            onDragStart={setDraggedMusicId}
+                            onDrop={reorderMusics}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
             </section>
           )}
@@ -1117,20 +1217,36 @@ export default function Dashboard({ setScreen }: DashboardProps) {
               </div>
 
               <div className="music-list-stack">
-                {visibleMusics.map((music) => (
-                  <MusicCard
-                    key={music.id}
-                    music={music}
-                    canManage={canManageMusic}
-                    onEdit={handleEditMusic}
-                    onDelete={handleDeleteMusic}
-                    onToggleFavorite={handleToggleFavorite}
-                    onPlay={(item) => setPlayerMusic(item)}
-                    onMoveType={handleMoveType}
-                    onDragStart={setDraggedMusicId}
-                    onDrop={reorderMusics}
-                  />
-                ))}
+                {visibleEvents.map(event => {
+                  const eventMusics = visibleMusics.filter(m => m.eventId === event.id)
+                  if (eventMusics.length === 0) return null
+                  
+                  return (
+                    <div key={event.id} className="event-music-group" style={{ marginBottom: '24px' }}>
+                      <h4 style={{ padding: '8px 16px', backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: '8px', marginBottom: '12px', color: 'var(--accent)' }}>
+                        Evento: {event.name}
+                      </h4>
+                      <div className="music-list-stack">
+                        {eventMusics.map((music) => (
+                          <MusicCard
+                            key={music.id}
+                            music={music}
+                            eventName={event.name}
+                            canManage={canManageMusic}
+                            onEdit={handleEditMusic}
+                            onDelete={handleDeleteMusic}
+                            onToggleFavorite={handleToggleFavorite}
+                            onPlay={(item) => setPlayerMusic(item)}
+                            onMoveType={handleMoveType}
+                            onStatusChange={handleStatusChange}
+                            onDragStart={setDraggedMusicId}
+                            onDrop={reorderMusics}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
             </section>
           )}
@@ -1169,20 +1285,36 @@ export default function Dashboard({ setScreen }: DashboardProps) {
               </div>
 
               <div className="music-list-stack">
-                {visibleMusics.map((music) => (
-                  <MusicCard
-                    key={music.id}
-                    music={music}
-                    canManage={canManageMusic}
-                    onEdit={handleEditMusic}
-                    onDelete={handleDeleteMusic}
-                    onToggleFavorite={handleToggleFavorite}
-                    onPlay={(item) => setPlayerMusic(item)}
-                    onMoveType={handleMoveType}
-                    onDragStart={setDraggedMusicId}
-                    onDrop={reorderMusics}
-                  />
-                ))}
+                {visibleEvents.map(event => {
+                  const eventMusics = visibleMusics.filter(m => m.eventId === event.id)
+                  if (eventMusics.length === 0) return null
+                  
+                  return (
+                    <div key={event.id} className="event-music-group" style={{ marginBottom: '24px' }}>
+                      <h4 style={{ padding: '8px 16px', backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: '8px', marginBottom: '12px', color: 'var(--accent)' }}>
+                        Evento: {event.name}
+                      </h4>
+                      <div className="music-list-stack">
+                        {eventMusics.map((music) => (
+                          <MusicCard
+                            key={music.id}
+                            music={music}
+                            eventName={event.name}
+                            canManage={canManageMusic}
+                            onEdit={handleEditMusic}
+                            onDelete={handleDeleteMusic}
+                            onToggleFavorite={handleToggleFavorite}
+                            onPlay={(item) => setPlayerMusic(item)}
+                            onMoveType={handleMoveType}
+                            onStatusChange={handleStatusChange}
+                            onDragStart={setDraggedMusicId}
+                            onDrop={reorderMusics}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
             </section>
           )}

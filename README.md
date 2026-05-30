@@ -22,7 +22,10 @@
 
 O **Sonora** é uma plataforma para gerenciamento de músicas em eventos, permitindo que organizadores criem eventos, recebam sugestões musicais dos participantes e controlem a aprovação e a reprodução das faixas.
 
----
+
+### Descrição
+Gerenciador e reprodutor de áudio para organização de eventos.
+
 
 ## Equipe
 
@@ -89,13 +92,13 @@ Você pode obter este repositório de três formas.
 
 ### Clonar via HTTPS
 
+
 ```bash
 git clone https://github.com/ariadnec-es/sonora.git
 ```
 
 ### Clonar via SSH
 
-Caso sua chave SSH já esteja configurada no GitHub:
 
 ```bash
 git clone git@github.com:ariadnec-es/sonora.git

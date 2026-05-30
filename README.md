@@ -159,6 +159,9 @@ npm run dev
 
 ---
 
+###  Database
+![alt text](images/doc/database/sonora.png)
+
 ## Sprint 2
 
 ### Testes

@@ -1,16 +1,20 @@
-CREATE DATABASE IF NOT EXISTS sonoradb;
-USE sonoradb;
+CREATE DATABASE sonora
+CHARACTER SET utf8mb4
+COLLATE utf8mb4_unicode_ci;
 
-SET FOREIGN_KEY_CHECKS = 0;
+USE sonora;
 
--- =========================================================
--- TABELA: plans
--- =========================================================
+-- =========================
+-- PLANS
+-- =========================
 CREATE TABLE plans (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
 
-    name ENUM('mensal', 'anual', 'experimentacao')
-        NOT NULL DEFAULT 'mensal',
+    name ENUM(
+        'mensal',
+        'anual',
+        'experimentacao'
+    ) NOT NULL DEFAULT 'mensal',
 
     start_date DATETIME NULL,
     end_date DATETIME NULL,
@@ -20,25 +24,18 @@ CREATE TABLE plans (
         ON UPDATE CURRENT_TIMESTAMP
 );
 
--- =========================================================
--- TABELA: users
--- =========================================================
+-- =========================
+-- USERS
+-- =========================
 CREATE TABLE users (
-    id CHAR(36) PRIMARY KEY, -- UUID
+    id CHAR(36) PRIMARY KEY,
 
     username VARCHAR(150) NOT NULL UNIQUE,
     password VARCHAR(255) NOT NULL,
 
-    first_name VARCHAR(150),
-    last_name VARCHAR(150),
-    email VARCHAR(254) UNIQUE,
-
-    is_staff BOOLEAN NOT NULL DEFAULT FALSE,
-    is_superuser BOOLEAN NOT NULL DEFAULT FALSE,
-    is_active BOOLEAN NOT NULL DEFAULT TRUE,
-
-    date_joined DATETIME DEFAULT CURRENT_TIMESTAMP,
-    last_login DATETIME NULL,
+    email VARCHAR(255) NULL,
+    first_name VARCHAR(150) NULL,
+    last_name VARCHAR(150) NULL,
 
     plan_id BIGINT NULL,
 
@@ -55,15 +52,16 @@ CREATE TABLE users (
         ON DELETE SET NULL
 );
 
--- =========================================================
--- TABELA: youtube_musics
--- =========================================================
+-- =========================
+-- YOUTUBE MUSICS
+-- =========================
 CREATE TABLE youtube_musics (
-    id CHAR(36) PRIMARY KEY, -- UUID
+    id CHAR(36) PRIMARY KEY,
 
     name VARCHAR(100) NOT NULL,
     url VARCHAR(255) NULL,
-    file VARCHAR(255) NULL,
+
+    file VARCHAR(500) NULL,
 
     user_id CHAR(36) NULL,
 
@@ -82,15 +80,15 @@ CREATE TABLE youtube_musics (
         REFERENCES users(id)
         ON DELETE SET NULL,
 
-    CONSTRAINT unique_name_url_combination
+    CONSTRAINT uq_music_name_url
         UNIQUE (name, url)
 );
 
--- =========================================================
--- TABELA: events
--- =========================================================
+-- =========================
+-- EVENTS
+-- =========================
 CREATE TABLE events (
-    id CHAR(36) PRIMARY KEY, -- UUID
+    id CHAR(36) PRIMARY KEY,
 
     start_date DATE NOT NULL,
     end_date DATE NOT NULL,
@@ -112,11 +110,11 @@ CREATE TABLE events (
         ON DELETE CASCADE
 );
 
--- =========================================================
--- TABELA: folders
--- =========================================================
+-- =========================
+-- FOLDERS
+-- =========================
 CREATE TABLE folders (
-    id CHAR(36) PRIMARY KEY, -- UUID
+    id CHAR(36) PRIMARY KEY,
 
     name VARCHAR(100) NOT NULL,
 
@@ -138,22 +136,27 @@ CREATE TABLE folders (
         ON DELETE CASCADE
 );
 
--- =========================================================
--- TABELA: music_order
--- =========================================================
+-- =========================
+-- MUSIC ORDER
+-- =========================
 CREATE TABLE music_order (
-    id CHAR(36) PRIMARY KEY, -- UUID
+    id CHAR(36) PRIMARY KEY,
 
     music_id CHAR(36) NOT NULL,
     event_id CHAR(36) NOT NULL,
 
     `order` INT NOT NULL,
 
-    status ENUM('pending', 'accepted', 'rejected')
-        NOT NULL DEFAULT 'pending',
+    status ENUM(
+        'pending',
+        'accepted',
+        'rejected'
+    ) NOT NULL DEFAULT 'pending',
 
-    category ENUM('interactive', 'background')
-        NOT NULL DEFAULT 'interactive',
+    category ENUM(
+        'interactive',
+        'background'
+    ) NOT NULL DEFAULT 'interactive',
 
     folder_id CHAR(36) NULL,
 
@@ -163,8 +166,8 @@ CREATE TABLE music_order (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         ON UPDATE CURRENT_TIMESTAMP,
 
-    CONSTRAINT chk_order_range
-        CHECK (`order` >= 1 AND `order` <= 30),
+    CONSTRAINT chk_music_order
+        CHECK (`order` BETWEEN 1 AND 30),
 
     CONSTRAINT fk_music_order_music
         FOREIGN KEY (music_id)
@@ -181,39 +184,9 @@ CREATE TABLE music_order (
         REFERENCES folders(id)
         ON DELETE SET NULL,
 
-    CONSTRAINT unique_event_music_combination
+    CONSTRAINT uq_event_music
         UNIQUE (event_id, music_id),
 
-    CONSTRAINT unique_event_order_combination
+    CONSTRAINT uq_event_order
         UNIQUE (event_id, `order`)
 );
-
--- =========================================================
--- ÍNDICES
--- =========================================================
-
-CREATE INDEX idx_users_plan_id
-ON users(plan_id);
-
-CREATE INDEX idx_music_user_id
-ON youtube_musics(user_id);
-
-CREATE INDEX idx_events_manager_id
-ON events(manager_id);
-
-CREATE INDEX idx_folders_parent_id
-ON folders(parent_id);
-
-CREATE INDEX idx_folders_event_id
-ON folders(event_id);
-
-CREATE INDEX idx_music_order_music_id
-ON music_order(music_id);
-
-CREATE INDEX idx_music_order_event_id
-ON music_order(event_id);
-
-CREATE INDEX idx_music_order_folder_id
-ON music_order(folder_id);
-
-SET FOREIGN_KEY_CHECKS = 1;

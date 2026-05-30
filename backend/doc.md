@@ -387,3 +387,131 @@ A API utiliza uma abordagem rígida de permissões. A base de segurança garante
 2. **Ciclo de Vida de Eventos:** Gerentes (Managers) perdem capacidade de alteração ou inserção de dados em Eventos (e suas Músicas vinculadas) assim que a data atual ultrapassa o encerramento do evento (`end_date`).
 3. **Plano Obrigatório:** Nenhuma das regras acima é alcançada se o `Plan` do usuário estiver expirado no momento da requisição.
 
+
+- Diagrama
+```dbml
+
+Table plans {
+  id bigint [pk, increment]
+
+  name plan_type
+
+  start_date datetime
+  end_date datetime
+
+  created_at datetime
+  updated_at datetime
+}
+
+Table users {
+  id uuid [pk]
+
+  username varchar [unique, not null]
+  password varchar
+
+  email varchar
+  first_name varchar
+  last_name varchar
+
+  plan_id bigint [ref: > plans.id]
+
+  is_admin boolean
+  is_manager boolean
+
+  created_at datetime
+  updated_at datetime
+}
+
+Table youtube_musics {
+  id uuid [pk]
+
+  name varchar
+  url varchar
+  file varchar
+
+  user_id uuid [ref: > users.id]
+
+  observation varchar
+  singer varchar
+  duration varchar
+
+  is_active boolean
+
+  created_at datetime
+  updated_at datetime
+
+  indexes {
+    (name, url) [unique]
+  }
+}
+
+Table events {
+  id uuid [pk]
+
+  start_date date
+  end_date date
+
+  event_name varchar [unique]
+  location varchar
+
+  manager_id uuid [ref: > users.id]
+
+  is_active boolean
+
+  created_at datetime
+  updated_at datetime
+}
+
+Table folders {
+  id uuid [pk]
+
+  name varchar
+
+  parent_id uuid [ref: > folders.id]
+  event_id uuid [ref: > events.id]
+
+  created_at datetime
+  updated_at datetime
+}
+
+Table music_order {
+  id uuid [pk]
+
+  music_id uuid [ref: > youtube_musics.id]
+  event_id uuid [ref: > events.id]
+
+  order int
+
+  status music_status
+  category music_category
+
+  folder_id uuid [ref: > folders.id]
+
+  is_active boolean
+
+  created_at datetime
+  updated_at datetime
+
+  indexes {
+    (event_id, music_id) [unique]
+    (event_id, order) [unique]
+  }
+}
+
+Enum plan_type {
+  mensal
+  anual
+  experimentacao
+}
+
+Enum music_status {
+  pending
+  accepted
+  rejected
+}
+
+Enum music_category {
+  interactive
+  background
+}
+```

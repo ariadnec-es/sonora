@@ -7,73 +7,97 @@
 * [Licença](#licença)
 
 ## Sobre o Projeto
-### Título
-Sonora
+### Título: `Sonora`
 
 ### Descrição
-Gerenciador e reprodutor de áudio para organização de eventos.
+
+- Gerenciador e reprodutor de áudio para organização de eventos.
 
 ### Componentes
 
-Ariadne Silva
+- Ariadne Silva
 
-Arthur Queiroz
+- Arthur Queiroz
 
-Cassio Costa
+- Cassio Costa
 
-Vitor Rayan
+- Vitor Rayan
 
-Victor Silva
+- Victor Silva
 
 ## Como clonar ou baixar
-Você pode obter este repositório de três formas:
+- Você pode obter este repositório de três formas:
 
 ### Clonar via HTTPS
-```git clone https://github.com/ariadnec-es/sonora.git```
-Isso criará uma cópia local do repositório em sua máquina.
+```bash 
+git clone https://github.com/ariadnec-es/sonora.git
+```
+- Isso criará uma cópia local do repositório em sua máquina.
 
 ### Clonar via SSH
-Se você já configurou sua chave SSH no GitHub, pode clonar usando:
+- Se você já configurou sua chave SSH no GitHub, pode clonar usando:
 
-```git clone git@github.com:ariadnec-es/sonora.git```
-Isso criará uma cópia local do repositório em sua máquina.
+```bash
+git clone git@github.com:ariadnec-es/sonora.git
+```
+
+- Isso criará uma cópia local do repositório em sua máquina.
 
 ### Baixar como ZIP
 
-Acesse a página do repositório no GitHub: https://github.com/ariadnec-es/sonora
+- Acesse a página do repositório no GitHub: https://github.com/ariadnec-es/sonora
 
-Clique no botão Code (verde).
+- Clique no botão Code (verde).
 
-Selecione Download ZIP.
+- Selecione Download ZIP.
 
-Extraia o arquivo ZIP para o local desejado em seu computador.
+- Extraia o arquivo ZIP para o local desejado em seu computador.
 
-Estrutura do Projeto
+### Stack de tecnologia do Projeto
 
-Esta seção pode variar conforme a organização do repositório de cada grupo.
+- **Backend** (API REST): 
+    - Python 3.12
+    - Django 5.2.14
+    - Django Rest FrameWork 3.17.1
+    - Django simple JWT 5.5.1
 
-```
-sonora/
-├── README.md    # Este arquivo de apresentação.
-└── sonora/      # Pasta principal do código-fonte.
-    ├── js/      # Scripts de comportamento e lógica do reprodutor.
-    └── style/   # Arquivos CSS para o design da interface.
-```
+- **Frontend** (React)
+    - TypeScript 6
+    - React 19
+    - Vite 8
+    - React Hot Toast 
+    - React Icons 
+    - ESLint 
 
 
 ## Sprint 2
 
-
-## Testes
+### Testes
 ---
 
 - Testes de Integração de API, utilizando uma classe base de Setup (BaseTestSetup) herdando do cliente de testes do Django REST Framework (APITestCase).
 
+- Validação de plano e renovação de plano (condição de acesso: ter plano ativo).
+```python
+class TestPlanMiddlewareAndRenewal(BaseTestSetup):
+    ...
+```
+
+-  Login criação de eventos e permissões.
+```python
+class TestViewPermissions(BaseTestSetup):
+    ...
+```
+
+- Ordenação de musicas, músicas adicionadas seguem corretamente a ordenação.
+```python
+class TestMusicOrderLogic(BaseTestSetup):
+```
 
 ![alt text](images/doc/sprint2/teste-image.png)
 
 
-## MVP
+### MVP
 ---
 
 - Login: Pessoa já cadastrada realiza login

@@ -178,3 +178,90 @@ class TestViewPermissions(BaseTestSetup):
         )
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+# =========================================================
+# TESTES DE REORDENAÇÃO E STATUS
+# =========================================================
+class TestMusicOrderLogic(BaseTestSetup):
+    def setUp(self):
+        super().setUp()
+        self.event = Event.objects.create(
+            event_name="Festa VIP",
+            manager=self.manager_user,
+            start_date=timezone.now().date(),
+            end_date=(timezone.now() + timedelta(days=1)).date(),
+        )
+        # Cria 3 músicas para o evento
+        self.musics = []
+        for i in range(1, 4):
+            m = YoutubeMusic.objects.create(
+                name=f"Musica {i}", url=f"http://yt.com/{i}", user=self.manager_user
+            )
+            mo = MusicOrder.objects.create(
+                event=self.event, music=m, order=i
+            )
+            self.musics.append(mo)
+
+    def test_sequential_reordering_on_create(self):
+        self.authenticate(self.manager_user)
+        new_music = YoutubeMusic.objects.create(
+            name="Nova", url="http://yt.com/new", user=self.manager_user
+        )
+        # Insere na posição 2
+        payload = {"event": self.event.id, "music": new_music.id, "order": 2}
+        response = self.client.post("/api/sonora/v1/music-order/", payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        # Verifica ordens:
+        # Original 1 -> 1
+        # Nova -> 2
+        # Original 2 -> 3
+        # Original 3 -> 4
+        orders = MusicOrder.objects.filter(event=self.event, is_active=True).order_by('order')
+        self.assertEqual(orders[0].music.name, "Musica 1")
+        self.assertEqual(orders[0].order, 1)
+        self.assertEqual(orders[1].music.name, "Nova")
+        self.assertEqual(orders[1].order, 2)
+        self.assertEqual(orders[2].music.name, "Musica 2")
+        self.assertEqual(orders[2].order, 3)
+        self.assertEqual(orders[3].music.name, "Musica 3")
+        self.assertEqual(orders[3].order, 4)
+
+    def test_reordering_on_update_move_down(self):
+        self.authenticate(self.manager_user)
+        # Move Musica 1 (order 1) para posição 3
+        mo1 = self.musics[0]
+        payload = {"order": 3}
+        response = self.client.patch(f"/api/sonora/v1/music-order/{mo1.id}/", payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        # Esperado:
+        # Musica 2 -> 1
+        # Musica 3 -> 2
+        # Musica 1 -> 3
+        orders = MusicOrder.objects.filter(event=self.event, is_active=True).order_by('order')
+        self.assertEqual(orders[0].music.name, "Musica 2")
+        self.assertEqual(orders[1].music.name, "Musica 3")
+        self.assertEqual(orders[2].music.name, "Musica 1")
+
+    def test_accept_action(self):
+        self.authenticate(self.manager_user)
+        mo = self.musics[0]
+        self.assertEqual(mo.status, "pending")
+        
+        response = self.client.post(f"/api/sonora/v1/music-order/{mo.id}/accept/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        
+        mo.refresh_from_db()
+        self.assertEqual(mo.status, "accepted")
+
+    def test_reject_action_soft_deletes(self):
+        self.authenticate(self.manager_user)
+        mo = self.musics[0]
+        
+        response = self.client.post(f"/api/sonora/v1/music-order/{mo.id}/reject/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        
+        mo.refresh_from_db()
+        self.assertEqual(mo.status, "rejected")
+        self.assertFalse(mo.is_active)

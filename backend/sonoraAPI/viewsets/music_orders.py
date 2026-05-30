@@ -1,9 +1,11 @@
 from django.db import transaction
 from django.db.models import F
-from rest_framework import permissions
+from rest_framework import permissions, status
+from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
+from rest_framework.response import Response
 
-from ..models import MusicOrder
+from ..models import MusicOrder, MusicStatus
 from ..serializers.music_orders import MusicOrderSerializer
 from .base import BaseViewSet
 
@@ -32,33 +34,76 @@ class MusicOrderViewSet(BaseViewSet):
 
         return MusicOrder.objects.none()
 
-    def _handle_reordering(self, event, order, exclude_id=None):
+    def _handle_reordering(self, event, new_order, instance_id=None):
         """
-        US08/US09: Se a ordem já existir, desloca as demais para frente.
+        US08/US09: Abre espaço para a nova ordem deslocando os itens existentes.
         """
         with transaction.atomic():
-            conflicting = MusicOrder.objects.filter(event=event, order=order)
-            if exclude_id:
-                conflicting = conflicting.exclude(id=exclude_id)
-            
-            if conflicting.exists():
-                # Desloca todas as músicas a partir desta ordem para frente
-                to_shift = MusicOrder.objects.filter(event=event, order__gte=order)
-                if exclude_id:
-                    to_shift = to_shift.exclude(id=exclude_id)
-                
-                # Para evitar conflitos de UniqueConstraint durante o update no SQLite,
-                # as vezes é necessário processar um a um ou usar valores temporários.
-                # Como o limite é pequeno (30 músicas), vamos iterar de trás para frente.
-                items = list(to_shift.order_by('-order'))
-                for item in items:
-                    item.order += 1
-                    item.save()
+            # Se for um item existente sendo movido, pegamos sua ordem atual
+            old_order = None
+            if instance_id:
+                try:
+                    mo = MusicOrder.objects.get(id=instance_id)
+                    old_order = mo.order
+                    # Movemos o item atual temporariamente para o final para não atrapalhar o shift
+                    MusicOrder.objects.filter(id=instance_id).update(order=1000)
+                except MusicOrder.DoesNotExist:
+                    pass
+
+            if old_order == new_order:
+                # Se old_order existia e é igual, voltamos o valor (no perform_update)
+                return
+
+            if old_order is None:
+                # Criação: Desloca todos a partir de new_order para frente
+                to_shift = MusicOrder.objects.filter(
+                    event=event, is_active=True, order__gte=new_order
+                ).order_by('-order')
+                for item in to_shift:
+                    MusicOrder.objects.filter(id=item.id).update(order=item.order + 1)
+            else:
+                if new_order < old_order:
+                    # Moveu para cima: Desloca itens entre new_order e old_order-1 para frente
+                    to_shift = MusicOrder.objects.filter(
+                        event=event, is_active=True, 
+                        order__gte=new_order, order__lt=old_order
+                    ).order_by('-order')
+                    for item in to_shift:
+                        MusicOrder.objects.filter(id=item.id).update(order=item.order + 1)
+                else:
+                    # Moveu para baixo: Desloca itens entre old_order+1 e new_order para trás
+                    to_shift = MusicOrder.objects.filter(
+                        event=event, is_active=True,
+                        order__gt=old_order, order__lte=new_order
+                    ).order_by('order')
+                    for item in to_shift:
+                        MusicOrder.objects.filter(id=item.id).update(order=item.order - 1)
+
+    @action(detail=True, methods=['post'])
+    def accept(self, request, pk=None):
+        instance = self.get_object()
+        if not self.can_delete(instance): # Manager do evento ou Admin
+            self.deny()
+        
+        instance.status = MusicStatus.ACCEPTED
+        instance.save()
+        return Response(self.get_serializer(instance).data)
+
+    @action(detail=True, methods=['post'])
+    def reject(self, request, pk=None):
+        instance = self.get_object()
+        if not self.can_delete(instance): # Manager do evento ou Admin
+            self.deny()
+        
+        # Como solicitado: "gerente pode excluir este vinculo"
+        instance.status = MusicStatus.REJECTED
+        instance.is_active = False
+        instance.save()
+        return Response({"message": "Vínculo removido com sucesso."}, status=status.HTTP_200_OK)
 
     def perform_create(self, serializer):
         user = self.request.user
         event = serializer.validated_data["event"]
-        music = serializer.validated_data["music"]
         order = serializer.validated_data["order"]
 
         if not user.is_authenticated:
@@ -88,7 +133,6 @@ class MusicOrderViewSet(BaseViewSet):
                 {"event": "Não é possível adicionar músicas a um evento finalizado."}
             )
 
-        # Manager pode adicionar qualquer música ao seu evento (ajuste US08)
         self._handle_reordering(event, order)
         serializer.save()
 
@@ -100,7 +144,7 @@ class MusicOrderViewSet(BaseViewSet):
 
         if self.is_admin():
             if order != instance.order or event != instance.event:
-                self._handle_reordering(event, order, exclude_id=instance.id)
+                self._handle_reordering(event, order, instance_id=instance.id)
             serializer.save()
             return
 
@@ -118,7 +162,7 @@ class MusicOrderViewSet(BaseViewSet):
             )
 
         if order != instance.order or event != instance.event:
-            self._handle_reordering(event, order, exclude_id=instance.id)
+            self._handle_reordering(event, order, instance_id=instance.id)
 
         serializer.save()
 

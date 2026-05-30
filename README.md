@@ -59,3 +59,35 @@ sonora/
     ├── js/      # Scripts de comportamento e lógica do reprodutor.
     └── style/   # Arquivos CSS para o design da interface.
 ```
+
+
+## Sprint 2
+
+
+## Testes
+---
+
+- Testes de Integração de API, utilizando uma classe base de Setup (BaseTestSetup) herdando do cliente de testes do Django REST Framework (APITestCase).
+
+
+![alt text](images/doc/sprint2/teste-image.png)
+
+
+## MVP
+---
+
+- Login: Pessoa já cadastrada realiza login
+
+![alt text](images/doc/sprint2/login.png)
+
+- Criar evento: Usuário com status de administrador cria evento
+
+![alt text](images/doc/sprint2/novo-evento.png)
+
+- Adicionar música: Adiciona música (url do youtube) via interface
+
+![alt text](images/doc/sprint2/adicionar-musica.png)
+
+- Aceitar música para evento: declina ou aceita música
+
+![alt text](images/doc/sprint2/aceitar-musica.png)

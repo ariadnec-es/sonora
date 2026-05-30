@@ -24,6 +24,17 @@ class MusicOrderSerializer(serializers.ModelSerializer):
             'updated_at'
         ]
 
+    def run_validators(self, value):
+        """
+        Desabilita o UniqueTogetherValidator para (event, order)
+        pois a reordenação é tratada no ViewSet.
+        """
+        for validator in self.validators[:]:
+            if isinstance(validator, serializers.UniqueTogetherValidator) and \
+               set(validator.fields) == {'event', 'order'}:
+                self.validators.remove(validator)
+        super().run_validators(value)
+
     def validate(self, attrs):
         music = attrs.get('music')
         request = self.context.get('request')

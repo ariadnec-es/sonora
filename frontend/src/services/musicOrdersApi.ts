@@ -38,6 +38,22 @@ export async function updateMusicOrder(
   })
 }
 
+// ─── Aceitar música ───────────────────────────────────────────────────────────
+
+export async function acceptMusicOrder(id: string): Promise<ApiMusicOrder> {
+  return apiFetch<ApiMusicOrder>(`/music-order/${id}/accept/`, {
+    method: 'POST',
+  })
+}
+
+// ─── Recusar música (soft delete) ─────────────────────────────────────────────
+
+export async function rejectMusicOrder(id: string): Promise<{ message: string }> {
+  return apiFetch<{ message: string }>(`/music-order/${id}/reject/`, {
+    method: 'POST',
+  })
+}
+
 // ─── Deletar music order (soft delete) ────────────────────────────────────────
 
 export async function deleteMusicOrder(id: string): Promise<void> {

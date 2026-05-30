@@ -15,7 +15,7 @@ import { buildEmbedUrl, buildThumbnail } from '../../utils/youtube'
 import { fetchMe, logout as apiLogout } from '../../services/authApi'
 import { fetchEvents, createEvent, updateEvent, deleteEvent as apiDeleteEvent } from '../../services/eventsApi'
 import { fetchMusics, createMusic, updateMusic, deleteMusic as apiDeleteMusic } from '../../services/musicsApi'
-import { fetchMusicOrders, createMusicOrder, updateMusicOrder, deleteMusicOrder } from '../../services/musicOrdersApi'
+import { fetchMusicOrders, createMusicOrder, updateMusicOrder, deleteMusicOrder, acceptMusicOrder, rejectMusicOrder } from '../../services/musicOrdersApi'
 import { fetchFolders, createFolder, updateFolder, deleteFolder as apiDeleteFolder } from '../../services/foldersApi'
 import { fetchUsers, updateUser } from '../../services/usersApi'
 import type { ApiUser } from '../../types/api'
@@ -468,11 +468,21 @@ export default function Dashboard({ setScreen }: DashboardProps) {
     const music = musics.find(m => m.id === id)
     if (!music || !music.orderApiId) return
 
-    setMusics(current => current.map(m => m.id === id ? { ...m, status } : m))
+    if (status === 'rejected') {
+      // "Recusar" remove o vínculo do evento
+      setMusics(current => current.filter(m => m.id !== id))
+    } else {
+      setMusics(current => current.map(m => m.id === id ? { ...m, status } : m))
+    }
 
     try {
-      await updateMusicOrder(music.orderApiId, { status })
-      toast.success(`Status da música atualizado para ${status === 'accepted' ? 'Aceita' : 'Rejeitada'}.`)
+      if (status === 'accepted') {
+        await acceptMusicOrder(music.orderApiId)
+        toast.success('Música aceita.')
+      } else if (status === 'rejected') {
+        await rejectMusicOrder(music.orderApiId)
+        toast.success('Música recusada e removida do evento.')
+      }
     } catch {
       toast.error('Falha ao sincronizar status no servidor.')
     }
@@ -757,8 +767,9 @@ export default function Dashboard({ setScreen }: DashboardProps) {
 
     if (resolvedOrder > 0 && draggedMusic.orderApiId && getAccessToken()) {
       try {
+        // O backend agora re-sequencia tudo baseado nesta nova posição
         await updateMusicOrder(draggedMusic.orderApiId, { order: resolvedOrder })
-        toast.success('Ordem sincronizada no servidor.')
+        toast.success('Ordem sincronizada.')
       } catch {
         toast.error('Falha ao sincronizar ordem no servidor.')
       }

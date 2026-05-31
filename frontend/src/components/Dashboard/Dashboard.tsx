@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useCallback } from 'react'
 import { toast } from 'react-hot-toast'
 import EventCard from '../EventCard/EventCard'
 import FolderTree, { type FolderNode } from '../FolderTree/FolderTree'
@@ -7,7 +7,7 @@ import MusicModal from '../MusicModal/MusicModal'
 import PlayerModal from '../PlayerModal/PlayerModal'
 import Sidebar, { type DashboardTab } from '../Sidebar/Sidebar'
 import Topbar from '../Topbar/Topbar'
-import { type UserRole, loadUsers, saveUsers } from '../../services/auth'
+import { type UserRole } from '../../services/auth'
 import { loadFromStorage, saveToStorage } from '../../services/localStorage'
 import type { EventItem } from '../../types/event'
 import type { MusicItem } from '../../types/music'
@@ -186,6 +186,15 @@ const removeFolderTree = (tree: FolderNode[], folderId: number): FolderNode[] =>
 }
 
 export default function Dashboard({ setScreen }: DashboardProps) {
+  console.log('DASHBOARD RENDER')
+
+  useEffect(() => {
+    console.log('DASHBOARD MOUNT')
+
+    return () => {
+      console.log('DASHBOARD UNMOUNT')
+    }
+  }, [])
   const [activeTab, setActiveTab] = useState<DashboardTab>('eventos')
   const [events, setEvents] = useState<EventItem[]>(DEFAULT_EVENTS)
   const [musics, setMusics] = useState<MusicItem[]>(DEFAULT_MUSICS)
@@ -212,7 +221,7 @@ export default function Dashboard({ setScreen }: DashboardProps) {
   const [managers, setManagers] = useState<ApiUser[]>([])
   const [eventForm, setEventForm] = useState({ name: '', organizer: '', startDate: '', endDate: '', managerId: '' })
 
-  const refreshAdminUsers = async () => {
+  const refreshAdminUsers = useCallback(async () => {
     if (getAccessToken() && userRole === 'admin') {
       try {
         const users = await fetchUsers()
@@ -221,7 +230,7 @@ export default function Dashboard({ setScreen }: DashboardProps) {
         console.error('Falha ao buscar usuários:', err)
       }
     }
-  }
+  }, [userRole])
 
   useEffect(() => {
     // Carrega dados do cache local imediatamente
@@ -359,7 +368,7 @@ export default function Dashboard({ setScreen }: DashboardProps) {
     }
 
     syncFromApi()
-  }, [])
+  }, [refreshAdminUsers])
 
   useEffect(() => {
     saveToStorage('sonora_events', events)
@@ -464,28 +473,29 @@ export default function Dashboard({ setScreen }: DashboardProps) {
     }, [activeTab, events, filterType, musics, search, sortBy, userRole, visibleEventNames, selectedEventId])
 
     async function handleStatusChange(id: number, status: 'pending' | 'accepted' | 'rejected') {
-    if (!canManageMusic) return
-    const music = musics.find(m => m.id === id)
-    if (!music || !music.orderApiId) return
+      if (!canManageMusic) return
+      const music = musics.find(m => m.id === id)
+      if (!music) return
 
-    if (status === 'rejected') {
-      // "Recusar" remove o vínculo do evento
-      setMusics(current => current.filter(m => m.id !== id))
-    } else {
+      // Atualiza estado local primeiro para feedback instantâneo
       setMusics(current => current.map(m => m.id === id ? { ...m, status } : m))
-    }
 
-    try {
-      if (status === 'accepted') {
-        await acceptMusicOrder(music.orderApiId)
-        toast.success('Música aceita.')
-      } else if (status === 'rejected') {
-        await rejectMusicOrder(music.orderApiId)
-        toast.success('Música recusada e removida do evento.')
+      if (!music.orderApiId) {
+        toast.success(`Status atualizado para ${status === 'accepted' ? 'aceito' : 'recusado'}.`)
+        return
       }
-    } catch {
-      toast.error('Falha ao sincronizar status no servidor.')
-    }
+
+      try {
+        if (status === 'accepted') {
+          await acceptMusicOrder(music.orderApiId)
+          toast.success('Música aceita com sucesso.')
+        } else if (status === 'rejected') {
+          await rejectMusicOrder(music.orderApiId)
+          toast.success('Música recusada com sucesso.')
+        }
+      } catch {
+        toast.error('Falha ao sincronizar status no servidor.')
+      }
     }
 
 
@@ -896,8 +906,6 @@ export default function Dashboard({ setScreen }: DashboardProps) {
     if (!selectedUser) return
 
     const lockedAdminUser = adminSelectedEmail === 'admin@admin'
-    const normalizedPermissions = normalizeEventAccess(adminSelectedProjects, events.map((event) => event.name))
-
     // Sincroniza com o backend
     if (getAccessToken()) {
       const eventIds = events
@@ -913,7 +921,7 @@ export default function Dashboard({ setScreen }: DashboardProps) {
         })
         toast.success('Permissões atualizadas no servidor.')
         refreshAdminUsers()
-      } catch (err) {
+      } catch {
         toast.error('Falha ao sincronizar permissões com o servidor.')
       }
     }
@@ -975,7 +983,7 @@ export default function Dashboard({ setScreen }: DashboardProps) {
     if (activeTab === 'configuracoes' && userRole === 'admin') {
       refreshAdminUsers()
     }
-  }, [activeTab, userRole])
+  }, [activeTab, userRole, refreshAdminUsers])
 
   const musicSummary = {
     total: visibleMusics.length,

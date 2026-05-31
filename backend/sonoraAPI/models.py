@@ -79,7 +79,7 @@ class User(AbstractUser):
 
     def __str__(self):
         is_admin = "S" if self.is_admin else "N"
-        is_manager = "S" if self.is_admin else "N"
+        is_manager = "S" if self.is_manager else "N"
         plan = self.plan.end_date.date() if self.plan else "Não atribuído"
         return f"Nome: {self.username} | Gerente: {is_manager} | Administrador: {is_admin} | Fim do Plano: {plan}"
 

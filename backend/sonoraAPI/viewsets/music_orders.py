@@ -95,11 +95,10 @@ class MusicOrderViewSet(BaseViewSet):
         if not self.can_delete(instance): # Manager do evento ou Admin
             self.deny()
         
-        # Como solicitado: "gerente pode excluir este vinculo"
         instance.status = MusicStatus.REJECTED
-        instance.is_active = False
+        # Mantemos is_active=True para que o status "Rejeitada" persista na listagem
         instance.save()
-        return Response({"message": "Vínculo removido com sucesso."}, status=status.HTTP_200_OK)
+        return Response(self.get_serializer(instance).data)
 
     def perform_create(self, serializer):
         user = self.request.user
@@ -148,18 +147,25 @@ class MusicOrderViewSet(BaseViewSet):
             serializer.save()
             return
 
-        if not self.is_manager():
-            self.deny()
-
-        if instance.event.manager != user or event.manager != user:
-            self.deny()
-
+        # Verifica se o evento de destino é válido (apenas para não-admins)
         if event.end_date < self.today():
             raise ValidationError(
-                {
-                    "event": "O evento já foi finalizado, não é possível alterar as músicas."
-                }
+                {"event": "O evento já foi finalizado, não é possível alterar as músicas."}
             )
+
+        # Regras de permissão para Manager e Cliente
+        can_edit = False
+        if self.is_manager():
+            # Manager pode editar se for o gerente tanto do evento atual quanto do novo
+            if instance.event.manager == user and event.manager == user:
+                can_edit = True
+        
+        # Cliente pode editar se for o dono da música vinculada
+        if not can_edit and instance.music.user == user:
+            can_edit = True
+
+        if not can_edit:
+            self.deny()
 
         if order != instance.order or event != instance.event:
             self._handle_reordering(event, order, instance_id=instance.id)

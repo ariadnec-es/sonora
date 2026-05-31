@@ -7,6 +7,7 @@ interface MusicModalProps {
   onClose: () => void
   events: EventItem[]
   editingMusic: MusicItem | null
+  defaultEventId?: number | null
   onSave: (payload: Omit<MusicItem, 'thumbnail' | 'createdAt'> & { id?: number }) => void
 }
 
@@ -22,7 +23,7 @@ const emptyState = {
   eventId: null as number | null,
 }
 
-export default function MusicModal({ open, onClose, events, editingMusic, onSave }: MusicModalProps) {
+export default function MusicModal({ open, onClose, events, editingMusic, defaultEventId, onSave }: MusicModalProps) {
   const [form, setForm] = useState(emptyState)
 
   useEffect(() => {
@@ -41,8 +42,11 @@ export default function MusicModal({ open, onClose, events, editingMusic, onSave
       return
     }
 
-    setForm(emptyState)
-  }, [editingMusic, open])
+    setForm({
+      ...emptyState,
+      eventId: defaultEventId ?? null,
+    })
+  }, [editingMusic, open, defaultEventId])
 
   if (!open) return null
 

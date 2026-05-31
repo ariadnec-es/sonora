@@ -996,7 +996,7 @@ export default function Dashboard({ setScreen }: DashboardProps) {
 
   return (
     <div className="dashboard-shell">
-      <Sidebar activeTab={activeTab} onSelectTab={setActiveTab} userEmail={userEmail} />
+      <Sidebar activeTab={activeTab} onSelectTab={setActiveTab} userEmail={userEmail} userRole={userRole} />
 
       <div className="dashboard-main">
         <Topbar
@@ -1459,6 +1459,7 @@ export default function Dashboard({ setScreen }: DashboardProps) {
         }}
         events={events}
         editingMusic={editingMusic}
+        defaultEventId={selectedEventId}
         onSave={handleMusicSave}
       />
 

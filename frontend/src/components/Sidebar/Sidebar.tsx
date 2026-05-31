@@ -13,6 +13,7 @@ interface SidebarProps {
   activeTab: DashboardTab
   onSelectTab: Dispatch<SetStateAction<DashboardTab>>
   userEmail: string
+  userRole: string
 }
 
 const menuItems: { key: DashboardTab; label: string }[] = [
@@ -25,7 +26,13 @@ const menuItems: { key: DashboardTab; label: string }[] = [
   { key: 'configuracoes', label: 'Configurações' },
 ]
 
-export default function Sidebar({ activeTab, onSelectTab, userEmail }: SidebarProps) {
+export default function Sidebar({ activeTab, onSelectTab, userEmail, userRole }: SidebarProps) {
+  const filteredItems = menuItems.filter((item) => {
+    if (userRole === 'admin' || userRole === 'gerente') return true
+    // Cliente só vê o básico
+    return ['eventos', 'musicas', 'favoritos', 'configuracoes'].includes(item.key)
+  })
+
   return (
     <aside className="dashboard-sidebar">
       <div className="sidebar-header">
@@ -36,7 +43,7 @@ export default function Sidebar({ activeTab, onSelectTab, userEmail }: SidebarPr
       </div>
 
       <nav className="sidebar-nav" aria-label="Navegação principal">
-        {menuItems.map((item) => (
+        {filteredItems.map((item) => (
           <button
             key={item.key}
             type="button"

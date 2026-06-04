@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Sonora
 
 ## Índice
@@ -22,10 +23,32 @@
 
 O **Sonora** é uma plataforma para gerenciamento de músicas em eventos, permitindo que organizadores criem eventos, recebam sugestões musicais dos participantes e controlem a aprovação e a reprodução das faixas.
 
+=======
+# SONORA
+
+## Índice
+* [Sobre o Projeto](#sobre-o-projeto)
+* [Como clonar ou baixar](#como-clonar-ou-baixar)
+* [Estrutura do Projeto](#estrutura-do-projeto)
+* [Licença](#licença)
+
+## Sobre o Projeto
+### Título
+Sonora
+>>>>>>> 9bb5011 (Revise README for Sonora project)
 
 ### Descrição
 Gerenciador e reprodutor de áudio para organização de eventos.
 
+<<<<<<< HEAD
+=======
+### Componentes
+Ariadne Silva
+Arthur Queiroz
+Cassio Costa
+Vitor Rayan
+Victor Silva
+>>>>>>> 9bb5011 (Revise README for Sonora project)
 
 ## Equipe
 
@@ -86,19 +109,13 @@ sonora/
 
 ---
 
-## Como Clonar ou Baixar
-
-Você pode obter este repositório de três formas.
-
 ### Clonar via HTTPS
-
 
 ```bash
 git clone https://github.com/ariadnec-es/sonora.git
 ```
 
 ### Clonar via SSH
-
 
 ```bash
 git clone git@github.com:ariadnec-es/sonora.git
@@ -158,6 +175,9 @@ npm run dev
 ```
 
 ---
+
+###  Database
+![alt text](images/doc/database/sonora.png)
 
 ## Sprint 2
 
@@ -228,12 +248,45 @@ Gerente aprova ou rejeita músicas enviadas para o evento.
 
 ![Aceitar Música](images/doc/sprint2/aceitar-musica.png)
 
+
+## Sprint 3
+
+- Implementação de `integração contínua` (CI). Testes automatizados.
+
+- Criação de arquivo .github/wokflow/testes-monorepo.yml
+
+```yaml
+name: Testes Automatizados (Monorepo)
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+```
+
+
+```yaml
+backend-tests:
+    name: Testes Backend (Django)
+    runs-on: ubuntu-latest
+```
+
+
+```yaml
+frontend-tests:
+    name: Testes Frontend (React)
+    runs-on: ubuntu-latest
+```
+
+
 ---
 
 ## Status do Projeto
 
 🚧 Em desenvolvimento
 
-* Sprint 2 concluída.
-* MVP funcional implementado.
-* Novas funcionalidades previstas para as próximas sprints.
+- Sprint 3 concluída.
+- Testes automatizados implementados.
+
+

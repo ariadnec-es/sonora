@@ -48,8 +48,8 @@ export async function acceptMusicOrder(id: string): Promise<ApiMusicOrder> {
 
 // ─── Recusar música (soft delete) ─────────────────────────────────────────────
 
-export async function rejectMusicOrder(id: string): Promise<{ message: string }> {
-  return apiFetch<{ message: string }>(`/music-order/${id}/reject/`, {
+export async function rejectMusicOrder(id: string): Promise<ApiMusicOrder> {
+  return apiFetch<ApiMusicOrder>(`/music-order/${id}/reject/`, {
     method: 'POST',
   })
 }

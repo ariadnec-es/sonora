@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useCallback } from 'react'
 import { toast } from 'react-hot-toast'
 import EventCard from '../EventCard/EventCard'
 import FolderTree, { type FolderNode } from '../FolderTree/FolderTree'
@@ -7,7 +7,7 @@ import MusicModal from '../MusicModal/MusicModal'
 import PlayerModal from '../PlayerModal/PlayerModal'
 import Sidebar, { type DashboardTab } from '../Sidebar/Sidebar'
 import Topbar from '../Topbar/Topbar'
-import { type UserRole, loadUsers, saveUsers } from '../../services/auth'
+import { type UserRole } from '../../services/auth'
 import { loadFromStorage, saveToStorage } from '../../services/localStorage'
 import type { EventItem } from '../../types/event'
 import type { MusicItem } from '../../types/music'
@@ -18,7 +18,7 @@ import { fetchMusics, createMusic, updateMusic, deleteMusic as apiDeleteMusic } 
 import { fetchMusicOrders, createMusicOrder, updateMusicOrder, deleteMusicOrder, acceptMusicOrder, rejectMusicOrder } from '../../services/musicOrdersApi'
 import { fetchFolders, createFolder, updateFolder, deleteFolder as apiDeleteFolder } from '../../services/foldersApi'
 import { fetchUsers, updateUser } from '../../services/usersApi'
-import type { ApiUser } from '../../types/api'
+import type { ApiUser, ApiMusicOrder } from '../../types/api'
 import { getAccessToken } from '../../services/api'
 
 const DEFAULT_EVENTS: EventItem[] = [
@@ -186,6 +186,15 @@ const removeFolderTree = (tree: FolderNode[], folderId: number): FolderNode[] =>
 }
 
 export default function Dashboard({ setScreen }: DashboardProps) {
+  console.log('DASHBOARD RENDER')
+
+  useEffect(() => {
+    console.log('DASHBOARD MOUNT')
+
+    return () => {
+      console.log('DASHBOARD UNMOUNT')
+    }
+  }, [])
   const [activeTab, setActiveTab] = useState<DashboardTab>('eventos')
   const [events, setEvents] = useState<EventItem[]>(DEFAULT_EVENTS)
   const [musics, setMusics] = useState<MusicItem[]>(DEFAULT_MUSICS)
@@ -212,7 +221,7 @@ export default function Dashboard({ setScreen }: DashboardProps) {
   const [managers, setManagers] = useState<ApiUser[]>([])
   const [eventForm, setEventForm] = useState({ name: '', organizer: '', startDate: '', endDate: '', managerId: '' })
 
-  const refreshAdminUsers = async () => {
+  const refreshAdminUsers = useCallback(async () => {
     if (getAccessToken() && userRole === 'admin') {
       try {
         const users = await fetchUsers()
@@ -221,7 +230,7 @@ export default function Dashboard({ setScreen }: DashboardProps) {
         console.error('Falha ao buscar usuários:', err)
       }
     }
-  }
+  }, [userRole])
 
   useEffect(() => {
     // Carrega dados do cache local imediatamente
@@ -359,7 +368,7 @@ export default function Dashboard({ setScreen }: DashboardProps) {
     }
 
     syncFromApi()
-  }, [])
+  }, [refreshAdminUsers])
 
   useEffect(() => {
     saveToStorage('sonora_events', events)
@@ -464,28 +473,43 @@ export default function Dashboard({ setScreen }: DashboardProps) {
     }, [activeTab, events, filterType, musics, search, sortBy, userRole, visibleEventNames, selectedEventId])
 
     async function handleStatusChange(id: number, status: 'pending' | 'accepted' | 'rejected') {
-    if (!canManageMusic) return
-    const music = musics.find(m => m.id === id)
-    if (!music || !music.orderApiId) return
+      if (!canManageMusic) return
+      const music = musics.find(m => m.id === id)
+      if (!music) return
 
-    if (status === 'rejected') {
-      // "Recusar" remove o vínculo do evento
-      setMusics(current => current.filter(m => m.id !== id))
-    } else {
-      setMusics(current => current.map(m => m.id === id ? { ...m, status } : m))
-    }
-
-    try {
-      if (status === 'accepted') {
-        await acceptMusicOrder(music.orderApiId)
-        toast.success('Música aceita.')
-      } else if (status === 'rejected') {
-        await rejectMusicOrder(music.orderApiId)
-        toast.success('Música recusada e removida do evento.')
+      if (!music.orderApiId) {
+        toast.error('Esta música não está vinculada a um pedido oficial e não pode ter o status alterado.')
+        return
       }
-    } catch {
-      toast.error('Falha ao sincronizar status no servidor.')
-    }
+
+      // Atualiza estado local primeiro para feedback instantâneo
+      setMusics(current => current.map(m => m.id === id ? { ...m, status } : m))
+
+      try {
+        let updatedOrder: ApiMusicOrder | undefined
+        if (status === 'accepted') {
+          updatedOrder = await acceptMusicOrder(music.orderApiId)
+          toast.success('Música aceita com sucesso.')
+        } else if (status === 'rejected') {
+          updatedOrder = await rejectMusicOrder(music.orderApiId)
+          toast.success('Música recusada com sucesso.')
+        }
+
+        // Sincroniza com o dado real vindo do servidor
+        if (updatedOrder) {
+          setMusics(current => current.map(m => 
+            m.id === id ? { ...m, status: updatedOrder.status || status } : m
+          ))
+        }
+      } catch (err) {
+        console.error('Erro ao atualizar status:', err)
+        toast.error('Falha ao sincronizar status no servidor. Revertendo alteração local.')
+        // Reverte o status local em caso de erro (busca o original)
+        const original = musics.find(m => m.id === id)
+        if (original) {
+          setMusics(current => current.map(m => m.id === id ? { ...m, status: original.status } : m))
+        }
+      }
     }
 
 
@@ -630,8 +654,11 @@ export default function Dashboard({ setScreen }: DashboardProps) {
     }
 
     if (payload.id) {
-      // Edição
+      // Edição de música existente
       const existing = musics.find((m) => m.id === payload.id)
+      if (!existing) return
+
+      // 1. Atualiza estado local para feedback visual imediato
       setMusics((current) =>
         current.map((music) =>
           music.id === payload.id
@@ -639,28 +666,59 @@ export default function Dashboard({ setScreen }: DashboardProps) {
             : music
         )
       )
-      toast.success('Música atualizada.')
-      // Sincroniza com API
-      if (existing?.apiId) {
-        updateMusic(existing.apiId, {
-          name: payload.title,
-          url: payload.youtubeLink,
-          singer: payload.artist,
-          observation: payload.notes,
-        }).catch(() => toast.error('Falha ao atualizar música no servidor.'))
-      }
-      // Atualiza MusicOrder (categoria/ordem)
-      if (existing?.orderApiId && payload.eventId !== undefined) {
-        const localEvent = events.find((e) => e.id === payload.eventId)
-        if (localEvent?.apiId) {
-          updateMusicOrder(existing.orderApiId, {
-            order: payload.order,
-            category: payload.type === 'fundo' ? 'background' : 'interactive',
-          }).catch(() => {})
+      toast.success('Música atualizada localmente.')
+
+      try {
+        // 2. Sincroniza YoutubeMusic na API
+        let musicApiId = existing.apiId
+        if (!musicApiId && getAccessToken()) {
+          const apiMusic = await createMusic({
+            name: payload.title,
+            url: payload.youtubeLink,
+            singer: payload.artist,
+            observation: payload.notes,
+          })
+          musicApiId = apiMusic.id
+          // Atualiza apiId no estado local
+          setMusics(current => current.map(m => m.id === payload.id ? { ...m, apiId: musicApiId } : m))
+        } else if (musicApiId) {
+          await updateMusic(musicApiId, {
+            name: payload.title,
+            url: payload.youtubeLink,
+            singer: payload.artist,
+            observation: payload.notes,
+          })
         }
+
+        // 3. Sincroniza ou Cria o vínculo (MusicOrder)
+        const localEvent = events.find((e) => e.id === payload.eventId)
+        if (localEvent?.apiId && musicApiId) {
+          if (existing.orderApiId) {
+            // Se já tinha vínculo, atualiza
+            await updateMusicOrder(existing.orderApiId, {
+              event: localEvent.apiId,
+              order: payload.order,
+              category: payload.type === 'fundo' ? 'background' : 'interactive',
+            })
+          } else {
+            // Se NÃO tinha vínculo, cria um agora
+            const apiOrder = await createMusicOrder({
+              music: musicApiId,
+              event: localEvent.apiId,
+              order: payload.order,
+              category: payload.type === 'fundo' ? 'background' : 'interactive',
+            })
+            // Salva o novo ID do vínculo no estado local
+            setMusics(current => current.map(m => m.id === payload.id ? { ...m, orderApiId: apiOrder.id } : m))
+          }
+        }
+        toast.success('Alterações sincronizadas com o servidor.')
+      } catch (err) {
+        console.error('Erro ao salvar música:', err)
+        toast.error('Falha ao sincronizar totalmente com o servidor.')
       }
     } else {
-      // Criação
+      // Criação de nova música
       const localId = Date.now()
       const newMusic: MusicItem = {
         ...payload,
@@ -669,17 +727,19 @@ export default function Dashboard({ setScreen }: DashboardProps) {
         createdAt: new Date().toISOString(),
       }
       setMusics((current) => [...current, newMusic])
-      toast.success('Música adicionada ao repertório.')
-      // Sincroniza com API
+      toast.success('Música adicionada ao painel.')
+
       if (getAccessToken()) {
         try {
+          // 1. Cria YoutubeMusic
           const apiMusic = await createMusic({
             name: payload.title,
             url: payload.youtubeLink,
             singer: payload.artist,
             observation: payload.notes,
           })
-          // Cria MusicOrder se houver evento selecionado
+
+          // 2. Cria MusicOrder se houver evento
           const localEvent = events.find((e) => e.id === payload.eventId)
           if (localEvent?.apiId) {
             const apiOrder = await createMusicOrder({
@@ -698,8 +758,10 @@ export default function Dashboard({ setScreen }: DashboardProps) {
               current.map((m) => m.id === localId ? { ...m, apiId: apiMusic.id } : m)
             )
           }
-        } catch {
-          toast.error('Falha ao salvar música no servidor.')
+          toast.success('Música e vínculo salvos no servidor.')
+        } catch (err) {
+          console.error('Erro ao criar música:', err)
+          toast.error('Música salva localmente, mas falhou no servidor.')
         }
       }
     }
@@ -896,8 +958,6 @@ export default function Dashboard({ setScreen }: DashboardProps) {
     if (!selectedUser) return
 
     const lockedAdminUser = adminSelectedEmail === 'admin@admin'
-    const normalizedPermissions = normalizeEventAccess(adminSelectedProjects, events.map((event) => event.name))
-
     // Sincroniza com o backend
     if (getAccessToken()) {
       const eventIds = events
@@ -913,7 +973,7 @@ export default function Dashboard({ setScreen }: DashboardProps) {
         })
         toast.success('Permissões atualizadas no servidor.')
         refreshAdminUsers()
-      } catch (err) {
+      } catch {
         toast.error('Falha ao sincronizar permissões com o servidor.')
       }
     }
@@ -975,7 +1035,7 @@ export default function Dashboard({ setScreen }: DashboardProps) {
     if (activeTab === 'configuracoes' && userRole === 'admin') {
       refreshAdminUsers()
     }
-  }, [activeTab, userRole])
+  }, [activeTab, userRole, refreshAdminUsers])
 
   const musicSummary = {
     total: visibleMusics.length,
@@ -988,7 +1048,7 @@ export default function Dashboard({ setScreen }: DashboardProps) {
 
   return (
     <div className="dashboard-shell">
-      <Sidebar activeTab={activeTab} onSelectTab={setActiveTab} userEmail={userEmail} />
+      <Sidebar activeTab={activeTab} onSelectTab={setActiveTab} userEmail={userEmail} userRole={userRole} />
 
       <div className="dashboard-main">
         <Topbar
@@ -1451,6 +1511,7 @@ export default function Dashboard({ setScreen }: DashboardProps) {
         }}
         events={events}
         editingMusic={editingMusic}
+        defaultEventId={selectedEventId}
         onSave={handleMusicSave}
       />
 

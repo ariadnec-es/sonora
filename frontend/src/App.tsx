@@ -12,17 +12,11 @@ import { getAccessToken, getRefreshToken } from './services/api'
 export type { Screen }
 
 export default function App() {
-  const [screen, setScreen] = useState<Screen>('login')
-
-  useEffect(() => {
-    // Verifica se há tokens válidos salvos para restaurar a sessão
+  const [screen, setScreen] = useState<Screen>(() => {
     const accessToken = getAccessToken()
     const refreshToken = getRefreshToken()
-
-    if (accessToken || refreshToken) {
-      setScreen('dashboard')
-    }
-  }, [])
+    return (accessToken || refreshToken) ? 'dashboard' : 'login'
+  })
 
   useEffect(() => {
     // Escuta evento de logout automático (token expirado e refresh falhou)

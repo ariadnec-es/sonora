@@ -1,0 +1,67 @@
+name: Testes Automatizados (Monorepo)
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+
+jobs:
+  # ==========================================
+  # JOB 1: TESTES DO BACKEND (DJANGO)
+  # ==========================================
+  backend-tests:
+    name: Testes Backend (Django)
+    runs-on: ubuntu-latest
+    
+    # Define que todos os comandos "run" deste job acontecerão na pasta ./backend
+    defaults:
+      run:
+        working-directory: ./backend
+
+    steps:
+    - name: Fazer o checkout do código
+      uses: actions/checkout@v4
+
+    - name: Configurar o Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Instalar dependências do Backend
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Executar testes do Django
+      run: python manage.py test
+
+  # ==========================================
+  # JOB 2: TESTES DO FRONTEND (REACT)
+  # ==========================================
+  frontend-tests:
+    name: Testes Frontend (React)
+    runs-on: ubuntu-latest
+    
+    # Define que todos os comandos "run" deste job acontecerão na pasta ./frontend
+    defaults:
+      run:
+        working-directory: ./frontend
+
+    steps:
+    - name: Fazer o checkout do código
+      uses: actions/checkout@v4
+
+    - name: Configurar o Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '24'
+
+    - name: Instalar dependências do Frontend
+      run: npm install
+
+    - name: Executar testes do React
+      # A variável CI=true evita que o Jest do React fique em modo "watch" (esperando interação)
+      run: npm test
+      env:
+        CI: true

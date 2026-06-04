@@ -231,6 +231,16 @@ Gerente aprova ou rejeita músicas enviadas para o evento.
 
 ![Aceitar Música](images/doc/sprint2/aceitar-musica.png)
 
+
+## Sprint 3
+
+- Implementação de CI/CD. Testes automatizados.
+
+```bash 
+./bin/act push -P ubuntu-latest=catthehacker/ubuntu:act-latest
+```
+
+
 ---
 
 ## Status do Projeto
@@ -240,3 +250,4 @@ Gerente aprova ou rejeita músicas enviadas para o evento.
 * Sprint 2 concluída.
 * MVP funcional implementado.
 * Novas funcionalidades previstas para as próximas sprints.
+

@@ -260,4 +260,3 @@ frontend-tests:
 - Sprint 3 concluída.
 - Testes automatizados implementados.
 
-

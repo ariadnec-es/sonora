@@ -468,7 +468,7 @@ export default function Dashboard({ setScreen }: DashboardProps) {
     const music = musics.find(m => m.id === id)
     if (!music || !music.orderApiId) return
 
-<<<<<<< HEAD
+
     if (status === 'rejected') {
       // "Recusar" remove o vínculo do evento
       setMusics(current => current.filter(m => m.id !== id))
@@ -476,19 +476,7 @@ export default function Dashboard({ setScreen }: DashboardProps) {
       setMusics(current => current.map(m => m.id === id ? { ...m, status } : m))
     }
 
-    try {
-      if (status === 'accepted') {
-        await acceptMusicOrder(music.orderApiId)
-        toast.success('Música aceita.')
-      } else if (status === 'rejected') {
-        await rejectMusicOrder(music.orderApiId)
-        toast.success('Música recusada e removida do evento.')
-=======
-      if (!music.orderApiId) {
-        toast.error('Esta música não está vinculada a um pedido oficial e não pode ter o status alterado.')
-        return
-      }
-
+  
       // Atualiza estado local primeiro para feedback instantâneo
       setMusics(current => current.map(m => m.id === id ? { ...m, status } : m))
 
@@ -516,11 +504,9 @@ export default function Dashboard({ setScreen }: DashboardProps) {
         if (original) {
           setMusics(current => current.map(m => m.id === id ? { ...m, status: original.status } : m))
         }
->>>>>>> 62a5336 (As músicas podem ser aceitas corretamente, usuários podem adicionar escolhendo a qual evento desejam vincular. Falta adiciionar campo duração (duration))
+
       }
-    } catch {
-      toast.error('Falha ao sincronizar status no servidor.')
-    }
+     
     }
 
 

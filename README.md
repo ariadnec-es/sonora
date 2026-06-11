@@ -250,13 +250,46 @@ frontend-tests:
     runs-on: ubuntu-latest
 ```
 
+## Sprint 4
+### Login e permissões
+
+---
+
+- Usuário faz login
+    - Depois de adicionado, o usuário pode fazer login com nome de usuário e senha ou email e senha.
+
+![alt text](images/doc/sprint4/usuario-faz-login.png)
+
+- Adminstrador cria evento e vincula gerente
+    - Adminstrador vincula o gerente (usuário com status de gerente), o gerente fica responsável pelo evento.
+
+![alt text](images/doc/sprint4/criar-evento.png)
+
+- Usuários podem visualizar evento
+    - O evento foi criado e está disponível para usuários.
+
+![alt text](images/doc/sprint4/usuario-comum-ve-evento.png)
+
+- Usuário pode enviar/sugerir músicas para evento
+    - As músicas enviados por este usuário não ficam visíveis para outros.
+
+![alt text](images/doc/sprint4/usuario-pode-adicionar-musicas.png)
+
+- As músicas enviadas pelo próprio usuário e status 
+    - É possivel ver se a musica está com status pendente, aceito ou rejeitado.
+
+![alt text](images/doc/sprint4/status-da-musica.png)
+
+- Gerenciamento de músicas enviadas ao evento
+    - O responsável pode aceitar declinar e editar as músicas enviadas
+
+![alt text](images/doc/sprint4/gerenciamento.png)
+
 
 ---
 
 ## Status do Projeto
 
-🚧 Em desenvolvimento
-
-- Sprint 3 concluída.
-- Testes automatizados implementados.
+- Sprint 4 concluída.
+- Login e permissões presentes.
 

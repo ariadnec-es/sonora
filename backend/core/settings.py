@@ -8,7 +8,6 @@ load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# ✅ CORREÇÃO 1: Chave maior para sumir com o aviso do JWT (mínimo de 32 caracteres)
 SECRET_KEY = os.getenv(
     "SECRET_KEY", "qPpWy6NWh8TaTsYkcDNqzQ_aumentando_tamanho_da_chave_aqui"
 )
@@ -24,7 +23,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-    "corsheaders",  # ✅ CORREÇÃO 2: App do CORS adicionado
+    "corsheaders",
     "rest_framework",
     "axes",
     "sonoraAPI",

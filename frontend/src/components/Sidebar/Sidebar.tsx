@@ -1,4 +1,5 @@
-import type { Dispatch, SetStateAction } from 'react'
+import { useEffect, useState, type Dispatch, type SetStateAction } from 'react'
+import { getAccessToken, getTokenExpiration } from '../../services/api'
 
 export type DashboardTab =
   | 'eventos'
@@ -27,6 +28,40 @@ const menuItems: { key: DashboardTab; label: string }[] = [
 ]
 
 export default function Sidebar({ activeTab, onSelectTab, userEmail, userRole }: SidebarProps) {
+  const [expiresIn, setExpiresIn] = useState<string | null>(null)
+
+  useEffect(() => {
+    const updateCountdown = () => {
+      const token = getAccessToken()
+      if (!token) {
+        setExpiresIn(null)
+        return
+      }
+
+      const exp = getTokenExpiration(token)
+      if (!exp) {
+        setExpiresIn(null)
+        return
+      }
+
+      const now = Date.now()
+      const diff = exp - now
+
+      if (diff <= 0) {
+        setExpiresIn('Expirado')
+        return
+      }
+
+      const minutes = Math.floor(diff / 1000 / 60)
+      const seconds = Math.floor((diff / 1000) % 60)
+      setExpiresIn(`${minutes}:${seconds.toString().padStart(2, '0')}`)
+    }
+
+    updateCountdown()
+    const interval = setInterval(updateCountdown, 1000)
+    return () => clearInterval(interval)
+  }, [])
+
   const filteredItems = menuItems.filter((item) => {
     if (userRole === 'admin' || userRole === 'gerente') return true
     // Cliente só vê o básico
@@ -61,6 +96,11 @@ export default function Sidebar({ activeTab, onSelectTab, userEmail, userRole }:
           <div>
             <p className="sidebar-user-label">Usuário ativo</p>
             <p className="sidebar-user-email">{userEmail}</p>
+            {expiresIn && (
+              <p style={{ fontSize: '0.6rem', color: '#a5b4d0', marginTop: '4px' }}>
+                Sessão expira em: {expiresIn}
+              </p>
+            )}
           </div>
         </div>
       </div>

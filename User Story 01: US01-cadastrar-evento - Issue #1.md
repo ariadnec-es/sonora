@@ -24,6 +24,6 @@ https://github.com/ariadnec-es/sonora/issues/1#issue-4376426109
 3. Não é permitido cadastrar dois eventos com o mesmo nome.
 4. O evento deve ser ativado imediatamente após o cadastro.
 
-## Brench
+## Branch
 
 feature/US01-cadastrar-evento

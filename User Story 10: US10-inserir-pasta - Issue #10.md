@@ -24,6 +24,6 @@ https://github.com/ariadnec-es/sonora/issues/10#issue-4376878671
 3. Pastas podem conter outras pastas (níveis)
 4. A visão em árvore mostra toda a estrutura de pastas e músicas.
 
-## Brench
+## Branch
 
 feature/US10-inserir-pasta

@@ -23,6 +23,6 @@ https://github.com/ariadnec-es/sonora/issues/7#issue-4376723465
 2. É possível transformar uma música de reações em música de fundo e vice-versa.
 3. O sistema sugere um ícone diferente para cada tipo de aba
 
-## Brench
+## Branch
 
 feature/US07-aba-reacoes-publico

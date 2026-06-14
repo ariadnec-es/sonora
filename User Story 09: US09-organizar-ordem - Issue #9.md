@@ -24,6 +24,6 @@ https://github.com/ariadnec-es/sonora/issues/9#issue-4376851455
 3. A nova ordenação é salva automaticamente.
 4. A ordenação é mantida ao alternar entre abas
 
-## Brench
+## Branch
 
 feature/US09-organizar-ordem

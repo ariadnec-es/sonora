@@ -24,6 +24,6 @@ https://github.com/ariadnec-es/sonora/issues/6#issue-4376684963
 3. O gerente pode mover uma música de uma aba para outra.
 4. Cada aba mantém sua própria ordenação independente.
 
-## Brench
+## Branch
 
 feature/US06-aba-musica-fundo

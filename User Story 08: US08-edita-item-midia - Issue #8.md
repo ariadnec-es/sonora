@@ -24,6 +24,6 @@ https://github.com/ariadnec-es/sonora/issues/8#issue-4376752751
 3. Ao editar a ordem, o sistema reordena automaticamente os demais itens.
 4. Alterações são salvas e refletidas imediatamente na listagem.
 
-## Brench
+## Branch
 
 feature/US08-edita-item-midia

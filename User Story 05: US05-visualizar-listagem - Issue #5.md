@@ -25,6 +25,6 @@ https://github.com/ariadnec-es/sonora/issues/5#issue-4376601586
 4. O gerente pode filtrar ou ordenar por qualquer coluna.
 
 
-## Brench
+## Branch
 
 feature/US05-visualizar-listagem

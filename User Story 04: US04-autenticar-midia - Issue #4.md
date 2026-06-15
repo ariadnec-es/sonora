@@ -24,6 +24,6 @@ https://github.com/ariadnec-es/sonora/issues/4#issue-4376569610
 3. Um gerente sem eventos vinculados vê uma mensagem de acesso negado.
 4. A sessão deve expirar após a inatividade de 30 minutos
 
-## Brench
+## Branch
 
 feature/US04-autenticar-midia

@@ -1,4 +1,5 @@
-import type { Dispatch, SetStateAction } from 'react'
+import { useEffect, useState, type Dispatch, type SetStateAction } from 'react'
+import { getAccessToken, getTokenExpiration } from '../../services/api'
 
 export type DashboardTab =
   | 'eventos'
@@ -13,6 +14,7 @@ interface SidebarProps {
   activeTab: DashboardTab
   onSelectTab: Dispatch<SetStateAction<DashboardTab>>
   userEmail: string
+  userRole: string
 }
 
 const menuItems: { key: DashboardTab; label: string }[] = [
@@ -25,7 +27,47 @@ const menuItems: { key: DashboardTab; label: string }[] = [
   { key: 'configuracoes', label: 'Configurações' },
 ]
 
-export default function Sidebar({ activeTab, onSelectTab, userEmail }: SidebarProps) {
+export default function Sidebar({ activeTab, onSelectTab, userEmail, userRole }: SidebarProps) {
+  const [expiresIn, setExpiresIn] = useState<string | null>(null)
+
+  useEffect(() => {
+    const updateCountdown = () => {
+      const token = getAccessToken()
+      if (!token) {
+        setExpiresIn(null)
+        return
+      }
+
+      const exp = getTokenExpiration(token)
+      if (!exp) {
+        setExpiresIn(null)
+        return
+      }
+
+      const now = Date.now()
+      const diff = exp - now
+
+      if (diff <= 0) {
+        setExpiresIn('Expirado')
+        return
+      }
+
+      const minutes = Math.floor(diff / 1000 / 60)
+      const seconds = Math.floor((diff / 1000) % 60)
+      setExpiresIn(`${minutes}:${seconds.toString().padStart(2, '0')}`)
+    }
+
+    updateCountdown()
+    const interval = setInterval(updateCountdown, 1000)
+    return () => clearInterval(interval)
+  }, [])
+
+  const filteredItems = menuItems.filter((item) => {
+    if (userRole === 'admin' || userRole === 'gerente') return true
+    // Cliente só vê o básico
+    return ['eventos', 'musicas', 'favoritos', 'configuracoes'].includes(item.key)
+  })
+
   return (
     <aside className="dashboard-sidebar">
       <div className="sidebar-header">
@@ -36,7 +78,7 @@ export default function Sidebar({ activeTab, onSelectTab, userEmail }: SidebarPr
       </div>
 
       <nav className="sidebar-nav" aria-label="Navegação principal">
-        {menuItems.map((item) => (
+        {filteredItems.map((item) => (
           <button
             key={item.key}
             type="button"
@@ -54,6 +96,11 @@ export default function Sidebar({ activeTab, onSelectTab, userEmail }: SidebarPr
           <div>
             <p className="sidebar-user-label">Usuário ativo</p>
             <p className="sidebar-user-email">{userEmail}</p>
+            {expiresIn && (
+              <p style={{ fontSize: '0.6rem', color: '#a5b4d0', marginTop: '4px' }}>
+                Sessão expira em: {expiresIn}
+              </p>
+            )}
           </div>
         </div>
       </div>

@@ -1,4 +1,4 @@
-# Sonora
+# Projeto de Engenharia de Software
 
 ## Índice
 
@@ -26,14 +26,17 @@ O **Sonora** é uma plataforma para gerenciamento de músicas em eventos, permit
 ### Descrição
 Gerenciador e reprodutor de áudio para organização de eventos.
 
+### Componentes
 
-## Equipe
+Ariadne Silva
 
-* Ariadne Silva
-* Arthur Queiroz
-* Cassio Costa
-* Vitor Rayan
-* Victor Silva
+Arthur Queiroz
+
+Cassio Costa
+
+Vitor Rayan
+
+Victor Silva
 
 ---
 
@@ -86,12 +89,7 @@ sonora/
 
 ---
 
-## Como Clonar ou Baixar
-
-Você pode obter este repositório de três formas.
-
 ### Clonar via HTTPS
-
 
 ```bash
 git clone https://github.com/ariadnec-es/sonora.git
@@ -99,19 +97,9 @@ git clone https://github.com/ariadnec-es/sonora.git
 
 ### Clonar via SSH
 
-
 ```bash
 git clone git@github.com:ariadnec-es/sonora.git
 ```
-
-### Baixar como ZIP
-
-1. Acesse o repositório no GitHub.
-2. Clique no botão **Code**.
-3. Selecione **Download ZIP**.
-4. Extraia o conteúdo em uma pasta de sua preferência.
-
----
 
 ## Como Executar o Projeto
 
@@ -231,12 +219,77 @@ Gerente aprova ou rejeita músicas enviadas para o evento.
 
 ![Aceitar Música](images/doc/sprint2/aceitar-musica.png)
 
+
+## Sprint 3
+
+- Implementação de `integração contínua` (CI). Testes automatizados.
+
+- Criação de arquivo .github/wokflow/testes-monorepo.yml
+
+```yaml
+name: Testes Automatizados (Monorepo)
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+```
+
+
+```yaml
+backend-tests:
+    name: Testes Backend (Django)
+    runs-on: ubuntu-latest
+```
+
+
+```yaml
+frontend-tests:
+    name: Testes Frontend (React)
+    runs-on: ubuntu-latest
+```
+
+## Sprint 4
+### Login e permissões
+
+---
+
+- Usuário faz login
+    - Depois de adicionado, o usuário pode fazer login com nome de usuário e senha ou email e senha.
+
+![alt text](images/doc/sprint4/usuario-faz-login.png)
+
+- Adminstrador cria evento e vincula gerente
+    - Adminstrador vincula o gerente (usuário com status de gerente), o gerente fica responsável pelo evento.
+
+![alt text](images/doc/sprint4/criar-evento.png)
+
+- Usuários podem visualizar evento
+    - O evento foi criado e está disponível para usuários.
+
+![alt text](images/doc/sprint4/usuario-comum-ve-evento.png)
+
+- Usuário pode enviar/sugerir músicas para evento
+    - As músicas enviados por este usuário não ficam visíveis para outros.
+
+![alt text](images/doc/sprint4/usuario-pode-adicionar-musicas.png)
+
+- As músicas enviadas pelo próprio usuário e status 
+    - É possivel ver se a musica está com status pendente, aceito ou rejeitado.
+
+![alt text](images/doc/sprint4/status-da-musica.png)
+
+- Gerenciamento de músicas enviadas ao evento
+    - O responsável pode aceitar declinar e editar as músicas enviadas
+
+![alt text](images/doc/sprint4/gerenciamento.png)
+
+
 ---
 
 ## Status do Projeto
 
-🚧 Em desenvolvimento
+- Sprint 4 concluída.
+- Login e permissões presentes.
 
-* Sprint 2 concluída.
-* MVP funcional implementado.
-* Novas funcionalidades previstas para as próximas sprints.

@@ -28,6 +28,27 @@ export function clearTokens() {
   localStorage.removeItem('loggedUser')
 }
 
+/**
+ * Decodifica o token JWT para extrair o timestamp de expiração (exp).
+ * Retorna o tempo em milissegundos.
+ */
+export function getTokenExpiration(token: string): number | null {
+  try {
+    const base64Url = token.split('.')[1]
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/')
+    const jsonPayload = decodeURIComponent(
+      window.atob(base64)
+        .split('')
+        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    )
+    const { exp } = JSON.parse(jsonPayload)
+    return exp ? exp * 1000 : null
+  } catch {
+    return null
+  }
+}
+
 // ─── Refresh silencioso ──────────────────────────────────────────────────────
 
 let isRefreshing = false

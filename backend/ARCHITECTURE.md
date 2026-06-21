@@ -1,72 +1,60 @@
-# 🏛️ Arquitetura da SonoraAPI
+### 1. Visão Geral da Arquitetura
 
-Este documento descreve a arquitetura técnica e as decisões de design implementadas no backend do projeto Sonora.
+O projeto utiliza um padrão **Model-View-Controller (MVC)** adaptado ao ecossistema Django, onde:
+*   **Models:** Definem a estrutura dos dados e regras de negócio (como a lógica de planos e reordenação de músicas).
+*   **Serializers:** Transformam instâncias do Django em JSON e validam dados de entrada.
+*   **ViewSets (Controllers):** Gerenciam a lógica de requisições HTTP, utilizando uma classe base (`BaseViewSet`) para padronizar segurança e comportamentos.
+*   **Middlewares/Autenticação:** Utiliza **JWT (JSON Web Tokens)** para autenticação e um sistema de `permissions` para controle de acesso refinado (Admin, Manager, Usuário comum).
 
-## 1. Visão Geral
-A SonoraAPI é uma plataforma de gerenciamento de músicas e eventos, permitindo que gerentes organizem playlists para eventos específicos. A arquitetura segue o padrão **RESTful** e é construída sobre o ecossistema Django.
+---
 
-## 2. Stack Tecnológica
-- **Framework Web:** Django 4.2+
-- **API Toolkit:** Django REST Framework (DRF)
-- **Autenticação:** JWT (JSON Web Tokens) via `rest_framework_simplejwt`
-- **Segurança:** 
-  - `django-axes`: Proteção contra ataques de força bruta.
-  - Middlewares customizados para validação de planos.
-- **Banco de Dados:** SQLite (Protótipo/Desenvolvimento) | Suporte a MySQL/PostgreSQL.
-- **Ambiente:** Python 3.12+
+### 2. Principais Componentes e Classes
 
-## 3. Componentes Principais
+#### **BaseViewSet**
+É o coração da API. Centraliza comportamentos repetitivos:
+*   **Soft Delete:** O método `perform_destroy` não apaga registros, apenas altera `is_active` para `False`.
+*   **Segurança:** Centraliza verificações como `is_admin()`, `is_manager()` e datas de validade (`today()`).
+*   **Filtros:** Adiciona automaticamente o filtro `is_active=True` para todos os endpoints.
 
-### 3.1. Camada de Modelagem (Models)
-A API utiliza **UUIDs** como chaves primárias para aumentar a segurança e evitar a enumeração de recursos.
+#### **FolderViewSet**
+Gerencia pastas organizacionais dentro de eventos. Permite que Admins vejam todas as pastas, enquanto Managers vejam apenas as pastas de seus respectivos eventos.
 
-- **User:** Extensão do `AbstractUser` do Django, adicionando papéis (`is_admin`, `is_manager`) e vínculo com um Plano.
-- **Plan:** Gerencia assinaturas (Mensal, Anual, Experimentação) com lógica automática de data de expiração no método `save()`.
-- **YoutubeMusic:** Armazena referências a músicas do YouTube vinculadas a um usuário.
-- **Event:** Representa um evento gerenciado por um `manager`.
-- **MusicOrder:** Tabela de junção que vincula músicas a eventos com uma ordem específica (1-30).
+#### **MusicOrderViewSet**
+Esta é a classe mais complexa devido à lógica de **fila/ordenação**:
+*   **`_handle_reordering`**: Um método robusto que, ao inserir ou mover uma música, recalcula automaticamente as posições das outras músicas na lista, deslocando os itens para evitar conflitos de `order`.
+*   **Actions (`accept`/`reject`)**: Gerenciam o fluxo de aceitação da música pelo gerente do evento.
 
-### 3.2. Lógica Base (BaseViewSet)
-Para garantir consistência e evitar repetição de código (DRY), foi implementada a classe `BaseViewSet` em `sonoraAPI/views.py`. Ela fornece:
-- **Soft Delete:** A deleção de registros apenas altera `is_active = False`.
-- **Filtros Padrão:** Filtragem automática por `is_active=True`.
-- **Helpers de Permissão:** Métodos auxiliares como `is_admin()` e `is_manager()`.
+#### **YoutubeMusicViewSet**
+Gerencia o catálogo de músicas.
+*   **Manager**: Pode ver as músicas que ele próprio cadastrou ou as músicas que foram solicitadas por terceiros em seus eventos.
+*   **Usuário comum**: Restrito apenas às suas próprias músicas.
 
-### 3.3. Segurança e Autorização
-A autorização é multifacetada:
-1.  **JWT Authentication:** Exige um token válido em todas as rotas protegidas.
-2.  **Custom Middleware (`MiddleWare`):** Intercepta todas as requisições (exceto rotas livres) para verificar se o plano do usuário ainda é válido.
-3.  **Custom Permissions (`Permissions`):**
-    - `HasValidPlanPermission`: Verifica a validade do plano no nível do DRF.
-    - `IsAdminOrReadOnly`: Restringe operações de escrita apenas para administradores em certos contextos.
+#### **UserViewSet**
+Gerencia o cadastro e perfil dos usuários.
+*   **`me`**: Endpoint rápido para obter os dados do usuário logado.
+*   **Criação/Atualização**: Lógica robusta que lida com a atribuição de planos, criação de contas de Manager e vinculação direta de gerentes a eventos (somente para Admins).
 
-## 4. Fluxo de Aplicação
+---
 
-### 4.1. Ciclo de Vida do Plano
-1.  **Criação:** Ao criar um usuário, um plano de `Experimentação` (2 horas) é atribuído automaticamente.
-2.  **Expiração:** O Middleware e a Permissão bloqueiam o acesso a recursos se a `end_date` do plano for menor que a data atual.
-3.  **Renovação:** Usuários podem renovar o plano através do endpoint `/api/sonora/renew_plan/`, que é uma das "rotas livres" no Middleware.
+### 3. Entidades (Models) e Relacionamentos
 
-### 4.2. Gerenciamento de Eventos
-- Gerentes podem criar eventos e adicionar músicas a eles.
-- A API valida se o gerente é o dono do evento e da música antes de permitir o vínculo (`MusicOrder`).
-- Eventos passados (baseado na `end_date`) tornam-se somente leitura para gerentes.
+*   **`User`**: Herda de `AbstractUser`. Possui uma relação 1:1 (implícita pelo plano) com `Plan`. Identifica-se como `is_admin` ou `is_manager`.
+*   **`Plan`**: Define a validade do acesso. A lógica de expiração é calculada no `save()` (ex: 2h para experimentação, 30 dias para mensal).
+*   **`YoutubeMusic`**: Armazena o link ou arquivo. Possui uma restrição de unicidade (nome + url) para evitar duplicatas.
+*   **`Event`**: O objeto central que conecta Gerentes, Pastas e Músicas.
+*   **`Folder`**: Organiza as músicas dentro de um evento, permitindo hierarquia (pastas pai/filho).
+*   **`MusicOrder`**: A "tabela de junção" inteligente. Vincula uma `Music` a um `Event` com um número de ordem (`order`), status de aprovação e categoria.
 
-## 5. Estrutura de Diretórios
-```text
-backend/
-├── core/                # Configurações globais do Django
-│   ├── settings.py      # Configurações, Apps e Middlewares
-│   ├── urls.py          # Roteamento global (v1, admin, token)
-│   └── middleware.py    # Lógica de interceptação de planos
-├── sonoraAPI/           # Aplicação principal
-│   ├── models.py        # Definições de dados e lógica de expiração
-│   ├── views.py         # ViewSets (BaseViewSet e implementações)
-│   ├── serializers.py   # Transformação de dados e campos calculados
-│   ├── permissions.py   # Regras de acesso customizadas
-│   └── urls.py          # Endpoints da aplicação
-└── staticfiles/         # Ativos estáticos para o painel Admin
-```
+---
 
-## 6. Padronização de Respostas
-A API utiliza `Serializers` do DRF para garantir que as respostas JSON sejam consistentes. O `UserSerializer`, por exemplo, utiliza `SerializerMethodField` para agregar eventos e músicas de forma estruturada em uma única chamada de perfil.
+### 4. Fluxo de Regras de Negócio (Destaques)
+
+1.  **Segurança de Plano:** O `HasValidPlanPermission` garante que, em cada requisição, a API valide se o plano do usuário ainda está ativo comparando `end_date` com `today()`.
+2.  **Validação de Eventos:** Não é permitido adicionar ou editar músicas em eventos que já terminaram (`event.end_date < today()`).
+3.  **Integridade de Dados:** O uso de `transaction.atomic()` no reordenamento de músicas garante que, se algo falhar durante o deslocamento das ordens, todo o processo seja revertido, mantendo a fila consistente.
+4.  **Autenticação:** O sistema utiliza `simplejwt` com tokens de 30 minutos, exigindo renovação via *refresh token* para maior segurança.
+
+### 5. Como estender
+*   Ao adicionar novos *ViewSets*, herde sempre de `BaseViewSet`.
+*   Para novas regras de acesso, utilize os helpers `self.is_admin()` ou `self.is_manager()` já presentes na classe base.
+*   Sempre que precisar alterar a ordem de itens, utilize o padrão de `_handle_reordering` para garantir que o banco de dados não sofra *lock* ou conflito de índices.

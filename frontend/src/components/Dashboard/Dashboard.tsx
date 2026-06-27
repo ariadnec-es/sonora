@@ -1,3 +1,5 @@
+
+import { apiFetch, getAccessToken } from "../../services/api";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "react-hot-toast";
 import EventCard from "../EventCard/EventCard";
@@ -41,7 +43,7 @@ import {
 } from "../../services/foldersApi";
 import { fetchUsers, updateUser } from "../../services/usersApi";
 import type { ApiUser, ApiMusicOrder } from "../../types/api";
-import { getAccessToken } from "../../services/api";
+
 
 const DEFAULT_EVENTS: EventItem[] = [
     {
@@ -178,7 +180,7 @@ const TAB_LABELS: Record<DashboardTab, { title: string; subtitle: string }> = {
 
 const normalizeText = (value: string) => value.trim().toLowerCase();
 const normalizeEventAccess = (values: string[], eventNames: string[]) => {
-    return values.filter((value) => eventNames.includes(value));
+    return (values || []).filter((value) => (eventNames || []).includes(value));
 };
 
 const applyFolderTree = (
@@ -187,19 +189,19 @@ const applyFolderTree = (
     folder: FolderNode,
 ): FolderNode[] => {
     if (parentId === null) {
-        return [...tree, folder];
+        return [...(tree || []), folder];
     }
 
-    return tree.map((node) =>
+    return (tree || []).map((node) =>
         node.id === parentId
             ? {
-                  ...node,
-                  children: [...node.children, folder],
-              }
+                ...node,
+                children: [...(node.children || []), folder],
+            }
             : {
-                  ...node,
-                  children: applyFolderTree(node.children, parentId, folder),
-              },
+                ...node,
+                children: applyFolderTree(node.children || [], parentId, folder),
+            },
     );
 };
 
@@ -208,14 +210,14 @@ const updateFolderTree = (
     folderId: number,
     updater: (folder: FolderNode) => FolderNode,
 ): FolderNode[] => {
-    return tree.map((node) => {
+    return (tree || []).map((node) => {
         if (node.id === folderId) {
             return updater(node);
         }
 
         return {
             ...node,
-            children: updateFolderTree(node.children, folderId, updater),
+            children: updateFolderTree(node.children || [], folderId, updater),
         };
     });
 };
@@ -224,11 +226,11 @@ const removeFolderTree = (
     tree: FolderNode[],
     folderId: number,
 ): FolderNode[] => {
-    return tree
+    return (tree || [])
         .filter((node) => node.id !== folderId)
         .map((node) => ({
             ...node,
-            children: removeFolderTree(node.children, folderId),
+            children: removeFolderTree(node.children || [], folderId),
         }));
 };
 
@@ -245,9 +247,7 @@ export default function Dashboard({ setScreen }: DashboardProps) {
     const [selectedEventId, setSelectedEventId] = useState<number | null>(null);
     const [search, setSearch] = useState("");
     const [sortBy, setSortBy] = useState<"order" | "title" | "artist">("order");
-    const [filterType, setFilterType] = useState<"all" | "fundo" | "reacao">(
-        "all",
-    );
+    const [filterType, setFilterType] = useState<"all" | "fundo" | "reacao">("all");
     const [draggedMusicId, setDraggedMusicId] = useState<number | null>(null);
     const [userEmail, setUserEmail] = useState("user@sonora.com");
     const [displayName, setDisplayName] = useState("Usuário");
@@ -255,11 +255,8 @@ export default function Dashboard({ setScreen }: DashboardProps) {
     const [accessibleEvents, setAccessibleEvents] = useState<string[]>([]);
     const [adminUsers, setAdminUsers] = useState<ApiUser[]>([]);
     const [adminSelectedEmail, setAdminSelectedEmail] = useState("");
-    const [adminSelectedRole, setAdminSelectedRole] =
-        useState<UserRole>("cliente");
-    const [adminSelectedProjects, setAdminSelectedProjects] = useState<
-        string[]
-    >([]);
+    const [adminSelectedRole, setAdminSelectedRole] = useState<UserRole>("cliente");
+    const [adminSelectedProjects, setAdminSelectedProjects] = useState<string[]>([]);
     const [showEventChecklist, setShowEventChecklist] = useState(false);
     const [managers, setManagers] = useState<ApiUser[]>([]);
     const [eventForm, setEventForm] = useState({
@@ -270,16 +267,49 @@ export default function Dashboard({ setScreen }: DashboardProps) {
         managerId: "",
     });
 
+    // Estados integrados para a API de Dashboard
+    const [dashboardApiData, setDashboardApiData] = useState<any | null>(null);
+    const [loadingDashboard, setLoadingDashboard] = useState<boolean>(false);
+    const [dashboardError, setDashboardError] = useState<string | null>(null);
+
+    // Ajustado para validar "manager" em vez de "gerente" - Declarado antes das funções para evitar ReferenceError
+    const canManageMusic = userRole === "admin" || userRole === "manager";
+
     const refreshAdminUsers = async () => {
         if (getAccessToken() && userRole === "admin") {
             try {
                 const users = await fetchUsers();
-                setAdminUsers(users);
+                setAdminUsers(users || []);
             } catch (err) {
                 console.error("Falha ao buscar usuários:", err);
             }
         }
     };
+
+    const fetchDashboardData = async () => {
+        const token = getAccessToken();
+        if (!token) return;
+
+        setLoadingDashboard(true);
+        setDashboardError(null);
+
+        try {
+            const data = await apiFetch<any>("/dashboard/");
+            setDashboardApiData(data);
+        } catch (err: any) {
+            console.error("Erro ao buscar dados do dashboard:", err);
+            setDashboardError("Não foi possível carregar os dados analíticos do servidor.");
+        } finally {
+            setLoadingDashboard(false);
+        }
+    };
+
+    // Efeito para buscar os dados consolidados ao selecionar a aba Dashboard
+    useEffect(() => {
+        if (activeTab === "dashboard" && (userRole === "admin" || userRole === "manager")) {
+            fetchDashboardData();
+        }
+    }, [activeTab, userRole]);
 
     useEffect(() => {
         const storedEvents = loadFromStorage<EventItem[]>("sonora_events", []);
@@ -311,8 +341,8 @@ export default function Dashboard({ setScreen }: DashboardProps) {
         setUserEmail(resolvedEmail);
         setDisplayName(
             storedSettings.displayName ||
-                storedUser?.displayName ||
-                resolvedEmail.split("@")[0],
+            storedUser?.displayName ||
+            resolvedEmail.split("@")[0],
         );
         setUserRole(storedUser?.role || "cliente");
         setAccessibleEvents(
@@ -328,12 +358,11 @@ export default function Dashboard({ setScreen }: DashboardProps) {
         async function syncFromApi() {
             try {
                 const me = await fetchMe();
-                // Ajustado para mapear "manager" quando is_manager for true
                 const role: UserRole = me.is_admin
                     ? "admin"
                     : me.is_manager
-                      ? "manager"
-                      : "cliente";
+                        ? "manager"
+                        : "cliente";
                 setUserRole(role);
                 setUserEmail(me.email);
                 setDisplayName(me.username);
@@ -557,14 +586,14 @@ export default function Dashboard({ setScreen }: DashboardProps) {
                 activeTab === "fundo"
                     ? music.type === "fundo"
                     : activeTab === "reacoes"
-                      ? music.type === "reacao"
-                      : activeTab === "favoritos"
-                        ? music.favorite
-                        : true;
+                        ? music.type === "reacao"
+                        : activeTab === "favoritos"
+                            ? music.favorite
+                            : true;
 
             const musicEventName = music.eventId
                 ? events.find((event) => event.id === music.eventId)?.name ||
-                  music.project
+                music.project
                 : music.project;
 
             const matchesEvent =
@@ -585,7 +614,6 @@ export default function Dashboard({ setScreen }: DashboardProps) {
         });
 
         filtered = [...filtered].sort((left, right) => {
-            // Ajustado para validar "manager"
             if (userRole === "admin" || userRole === "manager") {
                 const eventL =
                     events.find((e) => e.id === left.eventId)?.name || "";
@@ -706,7 +734,7 @@ export default function Dashboard({ setScreen }: DashboardProps) {
         if (userRole === "admin") {
             try {
                 const managersList = await fetchUsers(true);
-                setManagers(managersList);
+                setManagers(managersList || []);
             } catch {
                 toast.error("Falha ao carregar gerentes.");
             }
@@ -728,7 +756,7 @@ export default function Dashboard({ setScreen }: DashboardProps) {
             return;
         }
 
-        const selectedManager = managers.find(
+        const selectedManager = (managers || []).find(
             (m) => m.id === eventForm.managerId,
         );
 
@@ -738,18 +766,18 @@ export default function Dashboard({ setScreen }: DashboardProps) {
                 current.map((item) =>
                     item.id === editingEventId
                         ? {
-                              ...item,
-                              name: eventForm.name,
-                              organizer:
-                                  selectedManager?.username ||
-                                  eventForm.organizer,
-                              managerId: eventForm.managerId,
-                              startDate: eventForm.startDate,
-                              endDate: eventForm.endDate,
-                              musicCount: musics.filter(
-                                  (m) => m.eventId === item.id,
-                              ).length,
-                          }
+                            ...item,
+                            name: eventForm.name,
+                            organizer:
+                                selectedManager?.username ||
+                                eventForm.organizer,
+                            managerId: eventForm.managerId,
+                            startDate: eventForm.startDate,
+                            endDate: eventForm.endDate,
+                            musicCount: musics.filter(
+                                (m) => m.eventId === item.id,
+                            ).length,
+                        }
                         : item,
                 ),
             );
@@ -777,7 +805,7 @@ export default function Dashboard({ setScreen }: DashboardProps) {
                 musicCount: 0,
             };
             setEvents((current) => [...current, newEvent]);
-            toast.success("Evento salvo com sucesso.");
+            toast.success("Evento salvo.");
             if (getAccessToken()) {
                 createEvent({
                     event_name: eventForm.name,
@@ -823,7 +851,7 @@ export default function Dashboard({ setScreen }: DashboardProps) {
         if (userRole === "admin") {
             try {
                 const managersList = await fetchUsers(true);
-                setManagers(managersList);
+                setManagers(managersList || []);
             } catch {
                 toast.error("Falha ao carregar gerentes.");
             }
@@ -870,7 +898,7 @@ export default function Dashboard({ setScreen }: DashboardProps) {
                     (music.title.toLowerCase() ===
                         payload.title.toLowerCase() &&
                         music.artist.toLowerCase() ===
-                            payload.artist.toLowerCase())),
+                        payload.artist.toLowerCase())),
         );
         if (duplicateMusic) {
             toast.error("Essa música já existe no repertório.");
@@ -885,10 +913,10 @@ export default function Dashboard({ setScreen }: DashboardProps) {
                 current.map((music) =>
                     music.id === payload.id
                         ? {
-                              ...music,
-                              ...payload,
-                              thumbnail: buildThumbnail(payload.youtubeLink),
-                          }
+                            ...music,
+                            ...payload,
+                            thumbnail: buildThumbnail(payload.youtubeLink),
+                        }
                         : music,
                 ),
             );
@@ -992,10 +1020,10 @@ export default function Dashboard({ setScreen }: DashboardProps) {
                             current.map((m) =>
                                 m.id === localId
                                     ? {
-                                          ...m,
-                                          apiId: apiMusic.id,
-                                          orderApiId: apiOrder.id,
-                                      }
+                                        ...m,
+                                        apiId: apiMusic.id,
+                                        orderApiId: apiOrder.id,
+                                    }
                                     : m,
                             ),
                         );
@@ -1032,9 +1060,9 @@ export default function Dashboard({ setScreen }: DashboardProps) {
         setMusics((current) => current.filter((music) => music.id !== id));
         toast.success("Música removida.");
         if (existing?.orderApiId) {
-            deleteMusicOrder(existing.orderApiId).catch(() => {});
+            deleteMusicOrder(existing.orderApiId).catch(() => { });
         } else if (existing?.apiId) {
-            apiDeleteMusic(existing.apiId).catch(() => {});
+            apiDeleteMusic(existing.apiId).catch(() => { });
         }
     }
 
@@ -1155,14 +1183,14 @@ export default function Dashboard({ setScreen }: DashboardProps) {
         if (getAccessToken()) {
             const parentFolder = parentId
                 ? (function findFolder(
-                      nodes: FolderNode[],
-                  ): FolderNode | undefined {
-                      for (const n of nodes) {
-                          if (n.id === parentId) return n;
-                          const found = findFolder(n.children);
-                          if (found) return found;
-                      }
-                  })(folders)
+                    nodes: FolderNode[],
+                ): FolderNode | undefined {
+                    for (const n of nodes) {
+                        if (n.id === parentId) return n;
+                        const found = findFolder(n.children);
+                        if (found) return found;
+                    }
+                })(folders)
                 : undefined;
 
             const eventApiId = events.find((e) => e.apiId)?.apiId;
@@ -1181,7 +1209,7 @@ export default function Dashboard({ setScreen }: DashboardProps) {
                             })),
                         );
                     })
-                    .catch(() => {});
+                    .catch(() => { });
             }
         }
     }
@@ -1197,7 +1225,7 @@ export default function Dashboard({ setScreen }: DashboardProps) {
             })),
         );
         if (folder.apiId) {
-            updateFolder(folder.apiId, { name: name.trim() }).catch(() => {});
+            updateFolder(folder.apiId, { name: name.trim() }).catch(() => { });
         }
     }
 
@@ -1221,7 +1249,7 @@ export default function Dashboard({ setScreen }: DashboardProps) {
         );
         toast.success("Pasta removida.");
         if (node?.apiId) {
-            apiDeleteFolder(node.apiId).catch(() => {});
+            apiDeleteFolder(node.apiId).catch(() => { });
         }
     }
 
@@ -1233,7 +1261,7 @@ export default function Dashboard({ setScreen }: DashboardProps) {
             return;
         }
 
-        const selectedUser = adminUsers.find(
+        const selectedUser = (adminUsers || []).find(
             (u) => u.email === adminSelectedEmail,
         );
         if (!selectedUser) return;
@@ -1250,7 +1278,7 @@ export default function Dashboard({ setScreen }: DashboardProps) {
                 await updateUser(selectedUser.id, {
                     is_manager: lockedAdminUser
                         ? false
-                        : adminSelectedRole === "manager", // Ajustado para "manager"
+                        : adminSelectedRole === "manager",
                     is_admin: lockedAdminUser
                         ? true
                         : adminSelectedRole === "admin",
@@ -1263,17 +1291,17 @@ export default function Dashboard({ setScreen }: DashboardProps) {
             }
         }
 
-        const updatedUsers = adminUsers.map((user) =>
+        const updatedUsers = (adminUsers || []).map((user) =>
             user.email === adminSelectedEmail
                 ? {
-                      ...user,
-                      is_manager: lockedAdminUser
-                          ? false
-                          : adminSelectedRole === "manager", // Ajustado para "manager"
-                      is_admin: lockedAdminUser
-                          ? true
-                          : adminSelectedRole === "admin",
-                  }
+                    ...user,
+                    is_manager: lockedAdminUser
+                        ? false
+                        : adminSelectedRole === "manager",
+                    is_admin: lockedAdminUser
+                        ? true
+                        : adminSelectedRole === "admin",
+                }
                 : user,
         );
 
@@ -1285,8 +1313,8 @@ export default function Dashboard({ setScreen }: DashboardProps) {
             const role: UserRole = updatedUser.is_admin
                 ? "admin"
                 : updatedUser.is_manager
-                  ? "manager" // Ajustado para "manager"
-                  : "cliente";
+                    ? "manager"
+                    : "cliente";
             setUserRole(role);
             setAccessibleEvents(adminSelectedProjects);
 
@@ -1314,7 +1342,7 @@ export default function Dashboard({ setScreen }: DashboardProps) {
             return;
         }
 
-        const user = adminUsers.find((item) => item.email === value);
+        const user = (adminUsers || []).find((item) => item.email === value);
 
         if (user?.email === "admin@admin") {
             setAdminSelectedRole("admin");
@@ -1325,8 +1353,8 @@ export default function Dashboard({ setScreen }: DashboardProps) {
         const role: UserRole = user?.is_admin
             ? "admin"
             : user?.is_manager
-              ? "manager" // Ajustado para "manager"
-              : "cliente";
+                ? "manager"
+                : "cliente";
         setAdminSelectedRole(role);
         const projects = user?.my_events?.map((e) => e.event_name) || [];
         setAdminSelectedProjects(
@@ -1350,9 +1378,6 @@ export default function Dashboard({ setScreen }: DashboardProps) {
         reacoes: visibleMusics.filter((music) => music.type === "reacao")
             .length,
     };
-
-    // Ajustado para validar "manager" em vez de "gerente"
-    const canManageMusic = userRole === "admin" || userRole === "manager";
 
     return (
         <div className="dashboard-shell">
@@ -1420,313 +1445,267 @@ export default function Dashboard({ setScreen }: DashboardProps) {
                                 <section className="panel">
                                     <div className="panel-header">
                                         <div>
-                                            <p className="panel-eyebrow">
-                                                Métricas do Sistema
-                                            </p>
+                                            <p className="panel-eyebrow">Métricas em Tempo Real</p>
                                             <h3>Painel Analítico</h3>
                                         </div>
-                                    </div>
-
-                                    <div
-                                        className="settings-grid"
-                                        style={{
-                                            gridTemplateColumns:
-                                                "repeat(auto-fit, minmax(280px, 1fr))",
-                                            gap: "20px",
-                                        }}
-                                    >
-                                        <article className="settings-card">
-                                            <h4>Volume Geral</h4>
-                                            <p
-                                                style={{
-                                                    fontSize: "0.85rem",
-                                                    color: "#8fa0bc",
-                                                    marginBottom: "16px",
-                                                }}
-                                            >
-                                                Total de itens cadastrados sob
-                                                sua gestão.
-                                            </p>
-                                            <div
-                                                style={{
-                                                    display: "flex",
-                                                    justifyContent:
-                                                        "space-between",
-                                                    marginBottom: "8px",
-                                                }}
-                                            >
-                                                <span>Total de Eventos:</span>
-                                                <strong
-                                                    style={{
-                                                        color: "var(--accent)",
-                                                    }}
-                                                >
-                                                    {dashboardMetrics.totalEvs}
-                                                </strong>
-                                            </div>
-                                            <div
-                                                style={{
-                                                    display: "flex",
-                                                    justifyContent:
-                                                        "space-between",
-                                                    marginBottom: "8px",
-                                                }}
-                                            >
-                                                <span>Total de Músicas:</span>
-                                                <strong
-                                                    style={{
-                                                        color: "var(--accent)",
-                                                    }}
-                                                >
-                                                    {dashboardMetrics.totalMus}
-                                                </strong>
-                                            </div>
-                                            <div
-                                                style={{
-                                                    display: "flex",
-                                                    justifyContent:
-                                                        "space-between",
-                                                }}
-                                            >
-                                                <span>
-                                                    Média Músicas/Evento:
-                                                </span>
-                                                <strong
-                                                    style={{
-                                                        color: "var(--accent)",
-                                                    }}
-                                                >
-                                                    {
-                                                        dashboardMetrics.avgMusicsPerEvent
-                                                    }
-                                                </strong>
-                                            </div>
-                                        </article>
-
-                                        <article className="settings-card">
-                                            <h4>Status de Aprovação</h4>
-                                            <p
-                                                style={{
-                                                    fontSize: "0.85rem",
-                                                    color: "#8fa0bc",
-                                                    marginBottom: "16px",
-                                                }}
-                                            >
-                                                Controle do fluxo de moderação
-                                                de músicas.
-                                            </p>
-                                            <div
-                                                style={{
-                                                    display: "flex",
-                                                    justifyContent:
-                                                        "space-between",
-                                                    marginBottom: "8px",
-                                                }}
-                                            >
-                                                <span>Aprovadas:</span>
-                                                <strong
-                                                    style={{ color: "#4caf50" }}
-                                                >
-                                                    {dashboardMetrics.accepted}
-                                                </strong>
-                                            </div>
-                                            <div
-                                                style={{
-                                                    display: "flex",
-                                                    justifyContent:
-                                                        "space-between",
-                                                    marginBottom: "8px",
-                                                }}
-                                            >
-                                                <span>Pendentes:</span>
-                                                <strong
-                                                    style={{ color: "#ffeb3b" }}
-                                                >
-                                                    {dashboardMetrics.pending}
-                                                </strong>
-                                            </div>
-                                            <div
-                                                style={{
-                                                    display: "flex",
-                                                    justifyContent:
-                                                        "space-between",
-                                                }}
-                                            >
-                                                <span>Recusadas:</span>
-                                                <strong
-                                                    style={{ color: "#f44336" }}
-                                                >
-                                                    {dashboardMetrics.rejected}
-                                                </strong>
-                                            </div>
-                                        </article>
-
-                                        <article className="settings-card">
-                                            <h4>Divisão por Categoria</h4>
-                                            <p
-                                                style={{
-                                                    fontSize: "0.85rem",
-                                                    color: "#8fa0bc",
-                                                    marginBottom: "16px",
-                                                }}
-                                            >
-                                                Organização do repertório por
-                                                finalidade de uso.
-                                            </p>
-                                            <div
-                                                style={{
-                                                    display: "flex",
-                                                    justifyContent:
-                                                        "space-between",
-                                                    marginBottom: "8px",
-                                                }}
-                                            >
-                                                <span>Músicas de Fundo:</span>
-                                                <strong
-                                                    style={{
-                                                        color: "var(--accent)",
-                                                    }}
-                                                >
-                                                    {dashboardMetrics.countBg}
-                                                </strong>
-                                            </div>
-                                            <div
-                                                style={{
-                                                    display: "flex",
-                                                    justifyContent:
-                                                        "space-between",
-                                                    marginBottom: "8px",
-                                                }}
-                                            >
-                                                <span>Músicas de Reação:</span>
-                                                <strong
-                                                    style={{
-                                                        color: "var(--accent)",
-                                                    }}
-                                                >
-                                                    {
-                                                        dashboardMetrics.countReact
-                                                    }
-                                                </strong>
-                                            </div>
-                                            <div
-                                                style={{
-                                                    display: "flex",
-                                                    justifyContent:
-                                                        "space-between",
-                                                }}
-                                            >
-                                                <span>Favoritadas:</span>
-                                                <strong
-                                                    style={{ color: "#ff9800" }}
-                                                >
-                                                    {dashboardMetrics.favorites}
-                                                </strong>
-                                            </div>
-                                        </article>
-                                    </div>
-
-                                    <div style={{ marginTop: "32px" }}>
-                                        <h4
-                                            style={{
-                                                marginBottom: "16px",
-                                                color: "var(--accent)",
-                                            }}
+                                        <button
+                                            type="button"
+                                            className="btn-secondary"
+                                            onClick={fetchDashboardData}
+                                            disabled={loadingDashboard}
+                                            style={{ padding: "8px 16px", fontSize: "0.85rem" }}
                                         >
-                                            Distribuição nos Eventos
-                                        </h4>
-                                        <div className="music-list-stack">
-                                            {visibleEvents.map((event) => {
-                                                const eventMusics =
-                                                    musics.filter(
-                                                        (m) =>
-                                                            m.eventId ===
-                                                            event.id,
-                                                    );
-                                                const total =
-                                                    eventMusics.length;
-                                                const pct =
-                                                    dashboardMetrics.totalMus >
-                                                    0
-                                                        ? (total /
-                                                              dashboardMetrics.totalMus) *
-                                                          100
-                                                        : 0;
+                                            {loadingDashboard ? "Atualizando..." : "Atualizar Dados"}
+                                        </button>
+                                    </div>
 
-                                                return (
-                                                    <div
-                                                        key={event.id}
-                                                        style={{
-                                                            padding: "16px",
-                                                            backgroundColor:
-                                                                "rgba(255, 255, 255, 0.03)",
-                                                            borderRadius: "8px",
-                                                            display: "flex",
-                                                            flexDirection:
-                                                                "column",
-                                                            gap: "8px",
-                                                        }}
-                                                    >
-                                                        <div
-                                                            style={{
-                                                                display: "flex",
-                                                                justifyContent:
-                                                                    "space-between",
-                                                                alignItems:
-                                                                    "center",
-                                                            }}
-                                                        >
-                                                            <strong>
-                                                                {event.name}
-                                                            </strong>
-                                                            <span
+                                    {loadingDashboard && (
+                                        <div style={{ padding: "40px", textAlign: "center", color: "#8fa0bc" }}>
+                                            <p>Carregando dados consolidados do servidor...</p>
+                                        </div>
+                                    )}
+
+                                    {dashboardError && (
+                                        <div style={{
+                                            padding: "20px",
+                                            backgroundColor: "rgba(244, 67, 54, 0.1)",
+                                            border: "1px solid rgba(244, 67, 54, 0.3)",
+                                            borderRadius: "8px",
+                                            color: "#f44336",
+                                            marginBottom: "24px"
+                                        }}>
+                                            <p>{dashboardError}</p>
+                                        </div>
+                                    )}
+
+                                    {!loadingDashboard && !dashboardError && !dashboardApiData && (
+                                        <p className="empty-state">Nenhum dado disponível no momento.</p>
+                                    )}
+
+                                    {!loadingDashboard && !dashboardError && dashboardApiData && (
+                                        <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+
+                                            {/* Grid de Cards Principais */}
+                                            <div className="settings-grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "20px" }}>
+
+                                                <article className="settings-card">
+                                                    <h4>Usuários & Planos</h4>
+                                                    <div style={{ display: "flex", justifyContent: "space-between", margin: "12px 0 6px" }}>
+                                                        <span>Total de Usuários:</span>
+                                                        <strong style={{ color: "var(--accent)" }}>
+                                                            {dashboardApiData.users_and_plans?.total_users ?? 0}
+                                                        </strong>
+                                                    </div>
+                                                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
+                                                        <span>Planos Ativos:</span>
+                                                        <strong style={{ color: "#4caf50" }}>
+                                                            {dashboardApiData.users_and_plans?.active_plans ?? 0}
+                                                        </strong>
+                                                    </div>
+                                                    <div style={{ display: "flex", justifyContent: "space-between" }}>
+                                                        <span>Planos Expirados:</span>
+                                                        <strong style={{ color: "#f44336" }}>
+                                                            {dashboardApiData.users_and_plans?.expired_plans ?? 0}
+                                                        </strong>
+                                                    </div>
+                                                </article>
+
+                                                <article className="settings-card">
+                                                    <h4>Eventos</h4>
+                                                    <div style={{ display: "flex", justifyContent: "space-between", margin: "12px 0 6px" }}>
+                                                        <span>Total de Eventos:</span>
+                                                        <strong style={{ color: "var(--accent)" }}>
+                                                            {dashboardApiData.events?.total_events ?? 0}
+                                                        </strong>
+                                                    </div>
+                                                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
+                                                        <span>Ativos:</span>
+                                                        <strong style={{ color: "#4caf50" }}>
+                                                            {dashboardApiData.events?.active_events ?? 0}
+                                                        </strong>
+                                                    </div>
+                                                    <div style={{ display: "flex", justifyContent: "space-between" }}>
+                                                        <span>Inativos:</span>
+                                                        <strong style={{ color: "#8fa0bc" }}>
+                                                            {dashboardApiData.events?.inactive_events ?? 0}
+                                                        </strong>
+                                                    </div>
+                                                </article>
+
+                                                <article className="settings-card">
+                                                    <h4>Músicas & Pedidos</h4>
+                                                    <div style={{ display: "flex", justifyContent: "space-between", margin: "12px 0 6px" }}>
+                                                        <span>Músicas Enviadas:</span>
+                                                        <strong style={{ color: "var(--accent)" }}>
+                                                            {dashboardApiData.musics_and_orders?.total_uploaded_musics ?? 0}
+                                                        </strong>
+                                                    </div>
+                                                    <div style={{ display: "flex", justifyContent: "space-between" }}>
+                                                        <span>Total de Pedidos:</span>
+                                                        <strong style={{ color: "var(--accent)" }}>
+                                                            {dashboardApiData.musics_and_orders?.total_orders ?? 0}
+                                                        </strong>
+                                                    </div>
+                                                </article>
+                                            </div>
+
+                                            {/* Seção do Gráfico e Distribuição */}
+                                            <div style={{
+                                                display: "grid",
+                                                gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
+                                                gap: "24px",
+                                                marginTop: "12px"
+                                            }}>
+
+                                                {/* Gráfico SVG de Distribuição de Status dos Pedidos */}
+                                                <div className="settings-card" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "24px" }}>
+                                                    <h4 style={{ alignSelf: "flex-start", marginBottom: "20px" }}>Status dos Pedidos</h4>
+
+                                                    {(() => {
+                                                        const pending = dashboardApiData.musics_and_orders?.status_distribution?.pending ?? 0;
+                                                        const accepted = dashboardApiData.musics_and_orders?.status_distribution?.accepted ?? 0;
+                                                        const rejected = dashboardApiData.musics_and_orders?.status_distribution?.rejected ?? 0;
+                                                        const total = pending + accepted + rejected;
+
+                                                        if (total === 0) {
+                                                            return <p style={{ color: "#8fa0bc", fontSize: "0.9rem" }}>Sem pedidos para exibir o gráfico.</p>;
+                                                        }
+
+                                                        const radius = 50;
+                                                        const circumference = 2 * Math.PI * radius;
+
+                                                        const pctAccepted = (accepted / total) * circumference;
+                                                        const pctPending = (pending / total) * circumference;
+                                                        const pctRejected = (rejected / total) * circumference;
+
+                                                        return (
+                                                            <div style={{ display: "flex", alignItems: "center", gap: "32px", width: "100%", justifyContent: "space-around", flexWrap: "wrap" }}>
+                                                                <svg width="140" height="140" viewBox="0 0 120 120" style={{ transform: "rotate(-90deg)" }}>
+                                                                    <circle cx="60" cy="60" r={radius} fill="transparent" stroke="rgba(255,255,255,0.05)" strokeWidth="12" />
+
+                                                                    {accepted > 0 && (
+                                                                        <circle
+                                                                            cx="60" cy="60" r={radius} fill="transparent"
+                                                                            stroke="#4caf50" strokeWidth="12"
+                                                                            strokeDasharray={`${pctAccepted} ${circumference}`}
+                                                                        />
+                                                                    )}
+
+                                                                    {pending > 0 && (
+                                                                        <circle
+                                                                            cx="60" cy="60" r={radius} fill="transparent"
+                                                                            stroke="#ffeb3b" strokeWidth="12"
+                                                                            strokeDasharray={`${pctPending} ${circumference}`}
+                                                                            strokeDashoffset={-pctAccepted}
+                                                                        />
+                                                                    )}
+
+                                                                    {rejected > 0 && (
+                                                                        <circle
+                                                                            cx="60" cy="60" r={radius} fill="transparent"
+                                                                            stroke="#f44336" strokeWidth="12"
+                                                                            strokeDasharray={`${pctRejected} ${circumference}`}
+                                                                            strokeDashoffset={-(pctAccepted + pctPending)}
+                                                                        />
+                                                                    )}
+                                                                </svg>
+
+                                                                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                                                                    <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.85rem" }}>
+                                                                        <span style={{ width: "12px", height: "12px", borderRadius: "50%", backgroundColor: "#4caf50" }} />
+                                                                        <span>Aprovados: <strong>{accepted}</strong></span>
+                                                                    </div>
+                                                                    <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.85rem" }}>
+                                                                        <span style={{ width: "12px", height: "12px", borderRadius: "50%", backgroundColor: "#ffeb3b" }} />
+                                                                        <span>Pendentes: <strong>{pending}</strong></span>
+                                                                    </div>
+                                                                    <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.85rem" }}>
+                                                                        <span style={{ width: "12px", height: "12px", borderRadius: "50%", backgroundColor: "#f44336" }} />
+                                                                        <span>Recusados: <strong>{rejected}</strong></span>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })()}
+                                                </div>
+
+                                                {/* Distribuição de Planos Adquiridos */}
+                                                <div className="settings-card" style={{ display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                                                    <h4 style={{ marginBottom: "16px" }}>Distribuição por Tipo de Plano</h4>
+                                                    <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                                                        {[
+                                                            { label: "Anual", value: dashboardApiData.users_and_plans?.distribution?.anual ?? 0, color: "var(--accent)" },
+                                                            { label: "Mensal", value: dashboardApiData.users_and_plans?.distribution?.mensal ?? 0, color: "#9c27b0" },
+                                                            { label: "Experimentação", value: dashboardApiData.users_and_plans?.distribution?.experimentacao ?? 0, color: "#607d8b" }
+                                                        ].map((plan) => {
+                                                            const totalPlans =
+                                                                (dashboardApiData.users_and_plans?.distribution?.anual ?? 0) +
+                                                                (dashboardApiData.users_and_plans?.distribution?.mensal ?? 0) +
+                                                                (dashboardApiData.users_and_plans?.distribution?.experimentacao ?? 0);
+                                                            const planPct = totalPlans > 0 ? (plan.value / totalPlans) * 100 : 0;
+
+                                                            return (
+                                                                <div key={plan.label} style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                                                                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.85rem" }}>
+                                                                        <span>{plan.label}</span>
+                                                                        <span><strong>{plan.value}</strong> ({planPct.toFixed(0)}%)</span>
+                                                                    </div>
+                                                                    <div style={{ width: "100%", height: "8px", backgroundColor: "rgba(255, 255, 255, 0.05)", borderRadius: "4px", overflow: "hidden" }}>
+                                                                        <div style={{ width: `${planPct}%`, height: "100%", backgroundColor: plan.color, borderRadius: "4px" }} />
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Eventos Ativos em Destaque */}
+                                            <div className="settings-card">
+                                                <h4 style={{ marginBottom: "16px", color: "var(--accent)" }}>Eventos em Destaque por Pedidos</h4>
+                                                <div className="music-list-stack" style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                                                    {dashboardApiData.events?.top_active_events_by_orders && dashboardApiData.events.top_active_events_by_orders.length > 0 ? (
+                                                        dashboardApiData.events.top_active_events_by_orders.map((event: any) => (
+                                                            <div
+                                                                key={event.id}
                                                                 style={{
-                                                                    fontSize:
-                                                                        "0.85rem",
-                                                                    color: "#8fa0bc",
+                                                                    padding: "16px",
+                                                                    backgroundColor: "rgba(255, 255, 255, 0.02)",
+                                                                    borderRadius: "8px",
+                                                                    border: "1px solid rgba(255, 255, 255, 0.05)",
+                                                                    display: "flex",
+                                                                    justifyContent: "space-between",
+                                                                    alignItems: "center"
                                                                 }}
                                                             >
-                                                                {total} músicas
-                                                                (
-                                                                {pct.toFixed(0)}
-                                                                %)
-                                                            </span>
-                                                        </div>
-                                                        <div
-                                                            style={{
-                                                                width: "100%",
-                                                                height: "6px",
-                                                                backgroundColor:
-                                                                    "rgba(255, 255, 255, 0.1)",
-                                                                borderRadius:
-                                                                    "3px",
-                                                                overflow:
-                                                                    "hidden",
-                                                            }}
-                                                        >
-                                                            <div
-                                                                style={{
-                                                                    width: `${pct}%`,
-                                                                    height: "100%",
-                                                                    backgroundColor:
-                                                                        "var(--accent)",
-                                                                    borderRadius:
-                                                                        "3px",
-                                                                }}
-                                                            />
-                                                        </div>
-                                                    </div>
-                                                );
-                                            })}
+                                                                <div>
+                                                                    <strong style={{ fontSize: "0.95rem" }}>{event.event_name}</strong>
+                                                                    <p style={{ fontSize: "0.8rem", color: "#8fa0bc", marginTop: "4px" }}>
+                                                                        Período: {event.start_date} até {event.end_date}
+                                                                    </p>
+                                                                </div>
+                                                                <span style={{
+                                                                    fontSize: "0.85rem",
+                                                                    backgroundColor: "rgba(255, 255, 255, 0.08)",
+                                                                    padding: "4px 10px",
+                                                                    borderRadius: "12px"
+                                                                }}>
+                                                                    {event.total_orders} pedidos
+                                                                </span>
+                                                            </div>
+                                                        ))
+                                                    ) : (
+                                                        <p className="empty-state">Nenhum evento ativo com pedidos registrado no momento.</p>
+                                                    )}
+                                                </div>
+                                            </div>
                                         </div>
-                                    </div>
+                                    )}
                                 </section>
                             ) : (
                                 <section className="panel">
                                     <p className="empty-state">
-                                        Você não possui permissões
-                                        administrativas para acessar os dados
-                                        consolidados do painel.
+                                        Você não possui permissões administrativas para acessar os dados consolidados do painel.
                                     </p>
                                 </section>
                             )}
@@ -1752,7 +1731,7 @@ export default function Dashboard({ setScreen }: DashboardProps) {
                             </div>
 
                             <div className="event-grid">
-                                {visibleEvents.map((event) => (
+                                {(visibleEvents || []).map((event) => (
                                     <EventCard
                                         key={event.id}
                                         event={event}
@@ -1789,7 +1768,7 @@ export default function Dashboard({ setScreen }: DashboardProps) {
                                         <option value="">
                                             Todos os eventos
                                         </option>
-                                        {visibleEvents.map((event) => (
+                                        {(visibleEvents || []).map((event) => (
                                             <option
                                                 key={event.id}
                                                 value={event.id}
@@ -1815,9 +1794,9 @@ export default function Dashboard({ setScreen }: DashboardProps) {
                                         onChange={(event) =>
                                             setFilterType(
                                                 event.target.value as
-                                                    | "all"
-                                                    | "fundo"
-                                                    | "reacao",
+                                                | "all"
+                                                | "fundo"
+                                                | "reacao",
                                             )
                                         }
                                     >
@@ -1832,9 +1811,9 @@ export default function Dashboard({ setScreen }: DashboardProps) {
                                         onChange={(event) =>
                                             setSortBy(
                                                 event.target.value as
-                                                    | "order"
-                                                    | "title"
-                                                    | "artist",
+                                                | "order"
+                                                | "title"
+                                                | "artist",
                                             )
                                         }
                                     >
@@ -1862,8 +1841,8 @@ export default function Dashboard({ setScreen }: DashboardProps) {
                             </div>
 
                             <div className="music-list-stack">
-                                {visibleEvents.map((event) => {
-                                    const eventMusics = visibleMusics.filter(
+                                {(visibleEvents || []).map((event) => {
+                                    const eventMusics = (visibleMusics || []).filter(
                                         (m) => m.eventId === event.id,
                                     );
                                     if (eventMusics.length === 0) return null;
@@ -1934,57 +1913,57 @@ export default function Dashboard({ setScreen }: DashboardProps) {
                                     );
                                 })}
 
-                                {visibleMusics.filter((m) => !m.eventId)
+                                {(visibleMusics || []).filter((m) => !m.eventId)
                                     .length > 0 && (
-                                    <div className="event-music-group">
-                                        <h4
-                                            style={{
-                                                padding: "8px 16px",
-                                                backgroundColor:
-                                                    "rgba(255,255,255,0.05)",
-                                                borderRadius: "8px",
-                                                marginBottom: "12px",
-                                            }}
-                                        >
-                                            Sem Evento
-                                        </h4>
-                                        <div className="music-list-stack">
-                                            {visibleMusics
-                                                .filter((m) => !m.eventId)
-                                                .map((music) => (
-                                                    <MusicCard
-                                                        key={music.id}
-                                                        music={music}
-                                                        canManage={
-                                                            canManageMusic
-                                                        }
-                                                        onEdit={handleEditMusic}
-                                                        onDelete={
-                                                            handleDeleteMusic
-                                                        }
-                                                        onToggleFavorite={
-                                                            handleToggleFavorite
-                                                        }
-                                                        onPlay={(item) =>
-                                                            setPlayerMusic(item)
-                                                        }
-                                                        onMoveType={
-                                                            handleMoveType
-                                                        }
-                                                        onStatusChange={
-                                                            handleStatusChange
-                                                        }
-                                                        onDragStart={
-                                                            setDraggedMusicId
-                                                        }
-                                                        onDrop={reorderMusics}
-                                                    />
-                                                ))}
+                                        <div className="event-music-group">
+                                            <h4
+                                                style={{
+                                                    padding: "8px 16px",
+                                                    backgroundColor:
+                                                        "rgba(255,255,255,0.05)",
+                                                    borderRadius: "8px",
+                                                    marginBottom: "12px",
+                                                }}
+                                            >
+                                                Sem Evento
+                                            </h4>
+                                            <div className="music-list-stack">
+                                                {(visibleMusics || [])
+                                                    .filter((m) => !m.eventId)
+                                                    .map((music) => (
+                                                        <MusicCard
+                                                            key={music.id}
+                                                            music={music}
+                                                            canManage={
+                                                                canManageMusic
+                                                            }
+                                                            onEdit={handleEditMusic}
+                                                            onDelete={
+                                                                handleDeleteMusic
+                                                            }
+                                                            onToggleFavorite={
+                                                                handleToggleFavorite
+                                                            }
+                                                            onPlay={(item) =>
+                                                                setPlayerMusic(item)
+                                                            }
+                                                            onMoveType={
+                                                                handleMoveType
+                                                            }
+                                                            onStatusChange={
+                                                                handleStatusChange
+                                                            }
+                                                            onDragStart={
+                                                                setDraggedMusicId
+                                                            }
+                                                            onDrop={reorderMusics}
+                                                        />
+                                                    ))}
+                                            </div>
                                         </div>
-                                    </div>
-                                )}
+                                    )}
 
-                                {visibleMusics.length === 0 && (
+                                {(visibleMusics || []).length === 0 && (
                                     <p className="empty-state">
                                         Nenhuma música encontrada.
                                     </p>
@@ -2005,8 +1984,8 @@ export default function Dashboard({ setScreen }: DashboardProps) {
                             </div>
 
                             <div className="music-list-stack">
-                                {visibleEvents.map((event) => {
-                                    const eventMusics = visibleMusics.filter(
+                                {(visibleEvents || []).map((event) => {
+                                    const eventMusics = (visibleMusics || []).filter(
                                         (m) => m.eventId === event.id,
                                     );
                                     if (eventMusics.length === 0) return null;
@@ -2080,8 +2059,8 @@ export default function Dashboard({ setScreen }: DashboardProps) {
                             </div>
 
                             <div className="music-list-stack">
-                                {visibleEvents.map((event) => {
-                                    const eventMusics = visibleMusics.filter(
+                                {(visibleEvents || []).map((event) => {
+                                    const eventMusics = (visibleMusics || []).filter(
                                         (m) => m.eventId === event.id,
                                     );
                                     if (eventMusics.length === 0) return null;
@@ -2160,8 +2139,8 @@ export default function Dashboard({ setScreen }: DashboardProps) {
                             </div>
 
                             <FolderTree
-                                folders={folders}
-                                musics={musics}
+                                folders={folders || []}
+                                musics={musics || []}
                                 onCreateFolder={handleCreateFolder}
                                 onEditFolder={handleEditFolder}
                                 onDeleteFolder={handleDeleteFolder}
@@ -2185,8 +2164,8 @@ export default function Dashboard({ setScreen }: DashboardProps) {
                             </div>
 
                             <div className="music-list-stack">
-                                {visibleEvents.map((event) => {
-                                    const eventMusics = visibleMusics.filter(
+                                {(visibleEvents || []).map((event) => {
+                                    const eventMusics = (visibleMusics || []).filter(
                                         (m) => m.eventId === event.id,
                                     );
                                     if (eventMusics.length === 0) return null;
@@ -2271,8 +2250,8 @@ export default function Dashboard({ setScreen }: DashboardProps) {
                                         {userRole === "admin"
                                             ? "Administrador"
                                             : userRole === "manager"
-                                              ? "Gerente"
-                                              : "Cliente"}
+                                                ? "Gerente"
+                                                : "Cliente"}
                                     </p>
                                     <div className="project-chip-list">
                                         {(currentAccessEvents.length > 0
@@ -2314,7 +2293,7 @@ export default function Dashboard({ setScreen }: DashboardProps) {
                                                     <option value="">
                                                         Selecione um usuário
                                                     </option>
-                                                    {adminUsers.map((user) => (
+                                                    {(adminUsers || []).map((user) => (
                                                         <option
                                                             key={user.email}
                                                             value={user.email}
@@ -2370,16 +2349,16 @@ export default function Dashboard({ setScreen }: DashboardProps) {
                                                     }
                                                 >
                                                     {adminSelectedProjects.length >
-                                                    0
+                                                        0
                                                         ? adminSelectedProjects.join(
-                                                              ", ",
-                                                          )
+                                                            ", ",
+                                                        )
                                                         : "Selecionar eventos"}
                                                 </button>
 
                                                 {showEventChecklist && (
                                                     <div className="project-checkbox-grid">
-                                                        {events.map((event) => (
+                                                        {(events || []).map((event) => (
                                                             <label
                                                                 key={event.id}
                                                                 className="project-checkbox-item"
@@ -2402,16 +2381,16 @@ export default function Dashboard({ setScreen }: DashboardProps) {
                                                                                     event.name,
                                                                                 )
                                                                                     ? current.filter(
-                                                                                          (
-                                                                                              item,
-                                                                                          ) =>
-                                                                                              item !==
-                                                                                              event.name,
-                                                                                      )
+                                                                                        (
+                                                                                            item,
+                                                                                        ) =>
+                                                                                            item !==
+                                                                                            event.name,
+                                                                                    )
                                                                                     : [
-                                                                                          ...current,
-                                                                                          event.name,
-                                                                                      ],
+                                                                                        ...current,
+                                                                                        event.name,
+                                                                                    ],
                                                                         );
                                                                     }}
                                                                 />
@@ -2467,7 +2446,7 @@ export default function Dashboard({ setScreen }: DashboardProps) {
                     setShowMusicModal(false);
                     setEditingMusic(null);
                 }}
-                events={events}
+                events={events || []}
                 editingMusic={editingMusic}
                 defaultEventId={selectedEventId}
                 onSave={handleMusicSave}
@@ -2544,7 +2523,7 @@ export default function Dashboard({ setScreen }: DashboardProps) {
                                         <option value="">
                                             Selecione um gerente
                                         </option>
-                                        {managers.map((manager) => (
+                                        {(managers || []).map((manager) => (
                                             <option
                                                 key={manager.id}
                                                 value={manager.id}
